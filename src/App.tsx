@@ -16,10 +16,11 @@ import Profile from './pages/Profile';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 
-// Onboarding Route wrapper
+// Onboarding Route wrapper - allows logged in users who haven't completed onboarding
 const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
-  
+  const { state } = useApp();
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
@@ -30,11 +31,15 @@ const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
       </div>
     );
   }
-  
+
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/register" replace />;
   }
-  
+
+  if (state.initialized && state.profile && state.profile.onboardingCompleted) {
+    return <Navigate to="/" replace />;
+  }
+
   return <>{children}</>;
 };
 
@@ -66,10 +71,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Public Route wrapper (redirects to dashboard if logged in)
+// Public Route wrapper (redirects to onboarding/dashboard if logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
@@ -80,11 +85,11 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       </div>
     );
   }
-  
+
   if (user) {
     return <Navigate to="/" replace />;
   }
-  
+
   return <>{children}</>;
 };
 

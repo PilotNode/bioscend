@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Check, User, Target, Clock, Activity, Pill, Heart, Sparkles } from 'lucide-react';
 import Button from '../UI/Button';
 import { useApp } from '../../contexts/AppContext';
+import toast from 'react-hot-toast';
 
 interface QuizAnswer {
   id: string;
@@ -23,11 +25,13 @@ interface OnboardingQuizProps {
 }
 
 const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
+  const navigate = useNavigate();
   const { updateProfile } = useApp();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [isAnimating, setIsAnimating] = useState(false);
   const [showCompletion, setShowCompletion] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const questions: QuizQuestion[] = [
     {
@@ -141,12 +145,12 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
 
   const handleComplete = async () => {
     setIsAnimating(true);
-    
-    // Process answers into profile data
+    setIsSubmitting(true);
+
     const profileData = {
       ageGroup: answers.age_group,
-      goals: Array.isArray(answers.wellness_goals) 
-        ? answers.wellness_goals.join(', ') 
+      goals: Array.isArray(answers.wellness_goals)
+        ? answers.wellness_goals.join(', ')
         : answers.wellness_goals || '',
       currentSupplementLevel: answers.current_supplements,
       preferredActivities: Array.isArray(answers.wellness_activities)
@@ -159,19 +163,20 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
 
     try {
       await updateProfile(profileData);
-      
+      toast.success('Onboarding complete!');
+
+      setShowCompletion(true);
+      setIsAnimating(false);
+
       setTimeout(() => {
-        setShowCompletion(true);
-        setIsAnimating(false);
-        
-        // Complete onboarding after showing success message
-        setTimeout(() => {
-          onComplete(profileData);
-        }, 2000);
-      }, 500);
+        onComplete(profileData);
+        navigate('/');
+      }, 1500);
     } catch (error) {
       console.error('Failed to save onboarding data:', error);
+      toast.error('Failed to save profile. Please try again.');
       setIsAnimating(false);
+      setIsSubmitting(false);
     }
   };
 

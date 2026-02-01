@@ -797,21 +797,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [user, state.syncStatus]);
 
   const updateProfile = useCallback(async (profile: any) => {
-    if (!user) return;
-    
+    if (!user) throw new Error('User not authenticated');
+
+    const updatedProfile = {
+      ...state.profile,
+      ...profile,
+      userId: user.uid,
+      updatedAt: new Date()
+    };
+
+    dispatch({ type: 'SET_PROFILE', payload: updatedProfile });
+
     try {
       if (state.syncStatus === 'online') {
-        await firestoreService.updateProfile(user.uid, profile);
+        await firestoreService.updateProfile(user.uid, updatedProfile);
+        console.log('Profile saved to Firestore');
       } else {
-        dispatch({ type: 'SET_PROFILE', payload: profile });
-        toast.error('Profile updated locally - will sync when online');
+        throw new Error('Offline - profile will sync when online');
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      dispatch({ type: 'SET_PROFILE', payload: profile });
-      toast.error('Profile updated locally - will sync when online');
+      throw error;
     }
-  }, [user, state.syncStatus]);
+  }, [user, state.syncStatus, state.profile]);
 
   const generateAIInsights = useCallback(async () => {
     if (!state.aiEnabled || !user) return null;
