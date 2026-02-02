@@ -123,77 +123,75 @@ const AppContent: React.FC = () => {
     // This is just a callback to handle any additional logic if needed
     console.log('Onboarding flow completed');
   };
-  
+
   return (
-    <Router>
-      <div className="min-h-screen bg-surface-base">
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          } />
-          <Route path="/register" element={
-            <PublicRoute>
-              <Register />
-            </PublicRoute>
-          } />
-          
-          {/* Onboarding Route */}
-          <Route path="/onboarding" element={
-            <OnboardingRoute>
-              <AppProvider>
+    <AppProvider>
+      <Router>
+        <div className="min-h-screen bg-surface-base">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            } />
+            <Route path="/register" element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            } />
+
+            {/* Onboarding Route */}
+            <Route path="/onboarding" element={
+              <OnboardingRoute>
                 <OnboardingFlow onComplete={handleOnboardingComplete} />
-              </AppProvider>
-            </OnboardingRoute>
-          } />
-          
-          {/* Protected Routes */}
-          <Route path="/" element={
-            <AppProvider>
+              </OnboardingRoute>
+            } />
+
+            {/* Protected Routes */}
+            <Route path="/" element={
               <ProtectedRoute>
                 <Layout />
               </ProtectedRoute>
-            </AppProvider>
-          }>
-            <Route index element={<Dashboard />} />
-            <Route path="schedule" element={<Schedule />} />
-            <Route path="supplements" element={<Supplements />} />
-            <Route path="wellness" element={<Wellness />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="history" element={<History />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="profile" element={<Profile />} />
-          </Route>
-        </Routes>
-        
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#1E1E1E',
-              color: '#fff',
-              border: '1px solid #333333',
-              borderRadius: '12px',
-            },
-            success: {
-              iconTheme: {
-                primary: '#20C997',
-                secondary: '#fff',
+            }>
+              <Route index element={<Dashboard />} />
+              <Route path="schedule" element={<Schedule />} />
+              <Route path="supplements" element={<Supplements />} />
+              <Route path="wellness" element={<Wellness />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="history" element={<History />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="profile" element={<Profile />} />
+            </Route>
+          </Routes>
+
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1E1E1E',
+                color: '#fff',
+                border: '1px solid #333333',
+                borderRadius: '12px',
               },
-            },
-            error: {
-              iconTheme: {
-                primary: '#F03E3E',
-                secondary: '#fff',
+              success: {
+                iconTheme: {
+                  primary: '#20C997',
+                  secondary: '#fff',
+                },
               },
-            },
-          }}
-        />
-      </div>
-    </Router>
+              error: {
+                iconTheme: {
+                  primary: '#F03E3E',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+        </div>
+      </Router>
+    </AppProvider>
   );
 };
 
