@@ -47,7 +47,7 @@ const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
   const { state } = useApp();
-  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-base flex items-center justify-center">
@@ -58,16 +58,28 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       </div>
     );
   }
-  
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
+  // Wait for app to initialize
+  if (!state.initialized) {
+    return (
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Check if user needs onboarding
-  if (state.initialized && state.profile && !state.profile.onboardingCompleted) {
+  if (state.profile && !state.profile.onboardingCompleted) {
     return <Navigate to="/onboarding" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
