@@ -36,7 +36,19 @@ const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
     return <Navigate to="/register" replace />;
   }
 
-  if (state.initialized && state.profile && state.profile.onboardingCompleted) {
+  // Wait for app to initialize
+  if (!state.initialized) {
+    return (
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.profile && state.profile.onboardingCompleted) {
     return <Navigate to="/" replace />;
   }
 
