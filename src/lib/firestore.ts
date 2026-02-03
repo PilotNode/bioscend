@@ -436,6 +436,7 @@ export const firestoreService = {
             weight: '',
             goals: '',
             timezone: 'UTC',
+            onboardingCompleted: false,
             updatedAt: new Date()
           };
           callback(defaultProfile);

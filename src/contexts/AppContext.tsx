@@ -103,7 +103,8 @@ const initialState: AppState = {
     height: '',
     weight: '',
     goals: '',
-    timezone: 'UTC'
+    timezone: 'UTC',
+    onboardingCompleted: false
   },
   loading: false,
   syncStatus: 'offline',
@@ -812,12 +813,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (state.syncStatus === 'online') {
         await firestoreService.updateProfile(user.uid, updatedProfile);
         console.log('Profile saved to Firestore');
+        toast.success('Profile updated');
       } else {
-        throw new Error('Offline - profile will sync when online');
+        await offlineStorage.updateSettings({ ...updatedProfile });
+        toast.error('Profile saved locally - will sync when online');
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      throw error;
+      await offlineStorage.updateSettings({ ...updatedProfile });
+      toast.error('Profile saved locally - will sync when online');
     }
   }, [user, state.syncStatus, state.profile]);
 

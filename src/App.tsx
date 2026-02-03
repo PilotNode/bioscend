@@ -48,7 +48,7 @@ const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) 
     );
   }
 
-  if (state.profile && state.profile.onboardingCompleted) {
+  if (state.profile?.onboardingCompleted === true) {
     return <Navigate to="/" replace />;
   }
 
@@ -88,7 +88,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   // Check if user needs onboarding
-  if (state.profile && !state.profile.onboardingCompleted) {
+  if (state.profile && state.profile.onboardingCompleted !== true) {
     return <Navigate to="/onboarding" replace />;
   }
 
