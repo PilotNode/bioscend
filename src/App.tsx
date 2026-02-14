@@ -15,87 +15,8 @@ import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
+import Landing from './pages/Landing';
 
-// Onboarding Route wrapper - allows logged in users who haven't completed onboarding
-const OnboardingRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  const { state } = useApp();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/register" replace />;
-  }
-
-  // Wait for app to initialize
-  if (!state.initialized) {
-    return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (state.profile?.onboardingCompleted === true) {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
-};
-
-// Protected Route wrapper
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, loading } = useAuth();
-  const { state } = useApp();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  // Wait for app to initialize
-  if (!state.initialized) {
-    return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Check if user needs onboarding
-  if (state.profile && state.profile.onboardingCompleted !== true) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  return <>{children}</>;
-};
-
-// Public Route wrapper (redirects to onboarding/dashboard if logged in)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -110,11 +31,64 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
 
+  // If user is logged in, redirect to dashboard
   if (user) {
     return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
+};
+
+
+
+// Root Route wrapper - handles initial redirection
+const RootRoute: React.FC = () => {
+  const { user, loading } = useAuth();
+  const { state } = useApp();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not logged in, render Landing page
+  if (!user) {
+    return <Landing />;
+  }
+
+  // Check if we're still initializing or syncing profile
+  // If we have a user but no profile yet, and we are NOT "offline" (which implies we might never get one if it doesn't exist locally),
+  // we should wait. However, if initialized is true, we should have a profile if one exists.
+  if (!state.initialized && state.syncStatus !== 'offline') {
+    return (
+      <div className="min-h-screen bg-surface-base flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading Profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is logged in, check profile for onboarding status
+  if (state.profile) {
+    if (state.profile.onboardingCompleted === true) {
+      return <Layout />;
+    } else {
+      return <Navigate to="/onboarding" replace />;
+    }
+  }
+
+  // Fallback: If initialized but no profile found (rare edge case), likely new user or error.
+  // We can default to onboarding to be safe, or layout if we assume error.
+  // Given the auth flow creates a profile shell, this shouldn't happen often.
+  return <Navigate to="/onboarding" replace />;
 };
 
 const AppContent: React.FC = () => {
@@ -126,7 +100,7 @@ const AppContent: React.FC = () => {
 
   return (
     <AppProvider>
-      <Router>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <div className="min-h-screen bg-surface-base">
           <Routes>
             {/* Public Routes */}
@@ -141,19 +115,13 @@ const AppContent: React.FC = () => {
               </PublicRoute>
             } />
 
-            {/* Onboarding Route */}
+            {/* Onboarding Route - Accessible to everyone */}
             <Route path="/onboarding" element={
-              <OnboardingRoute>
-                <OnboardingFlow onComplete={handleOnboardingComplete} />
-              </OnboardingRoute>
+              <OnboardingFlow onComplete={handleOnboardingComplete} />
             } />
 
-            {/* Protected Routes */}
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }>
+            {/* Root Route - Handles redirection based on auth status */}
+            <Route path="/" element={<RootRoute />}>
               <Route index element={<Dashboard />} />
               <Route path="schedule" element={<Schedule />} />
               <Route path="supplements" element={<Supplements />} />

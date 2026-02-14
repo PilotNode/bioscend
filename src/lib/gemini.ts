@@ -13,7 +13,7 @@ class UserContextBuilder {
   static buildSystemPrompt(userContext: UserContext): string {
     const profile = userContext.profile || {};
     const currentDate = new Date().toLocaleDateString();
-    
+
     return `You are a knowledgeable wellness and biohacking assistant. Today is ${currentDate}.
 
 USER PROFILE:
@@ -25,13 +25,13 @@ USER PROFILE:
 - Timezone: ${profile.timezone || 'UTC'}
 
 CURRENT ROUTINE:
-- Active Supplements (${userContext.supplements.length}): ${userContext.supplements.map(s => 
-  `${s.name} (${s.dosage || 'dosage not specified'}, ${s.timeOfDay || 'timing not specified'})`
-).join(', ') || 'None'}
+- Active Supplements (${userContext.supplements.length}): ${userContext.supplements.map(s =>
+      `${s.name} (${s.dosage || 'dosage not specified'}, ${s.timeOfDay || 'timing not specified'})`
+    ).join(', ') || 'None'}
 
-- Active Wellness Activities (${userContext.wellness.length}): ${userContext.wellness.map(w => 
-  `${w.name} (${w.duration || 'duration not specified'} min, ${w.timeOfDay || 'timing not specified'})`
-).join(', ') || 'None'}
+- Active Wellness Activities (${userContext.wellness.length}): ${userContext.wellness.map(w =>
+      `${w.name} (${w.duration || 'duration not specified'} min, ${w.timeOfDay || 'timing not specified'})`
+    ).join(', ') || 'None'}
 
 RECENT PERFORMANCE:
 - Total History Entries: ${userContext.history.length}
@@ -48,24 +48,24 @@ GUIDELINES:
 
   static calculateCompletionRate(userContext: UserContext): number {
     if (!userContext.history || userContext.history.length === 0) return 0;
-    
+
     const totalTasks = userContext.supplements.length + userContext.wellness.length;
     if (totalTasks === 0) return 0;
-    
+
     // Calculate completion rate for the last 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
+
     const recentHistory = userContext.history.filter(entry => {
-      const entryDate = entry.completedAt instanceof Date 
-        ? entry.completedAt 
+      const entryDate = entry.completedAt instanceof Date
+        ? entry.completedAt
         : new Date(entry.completedAt);
       return entryDate >= sevenDaysAgo;
     });
-    
+
     const expectedCompletions = totalTasks * 7;
     const actualCompletions = recentHistory.length;
-    
+
     return Math.min(100, Math.round((actualCompletions / expectedCompletions) * 100));
   }
 
@@ -75,8 +75,8 @@ GUIDELINES:
     }
 
     const last7Days = userContext.history.filter(entry => {
-      const entryDate = entry.completedAt instanceof Date 
-        ? entry.completedAt 
+      const entryDate = entry.completedAt instanceof Date
+        ? entry.completedAt
         : new Date(entry.completedAt);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -92,7 +92,7 @@ GUIDELINES:
   static buildInsightsPrompt(userContext: UserContext): string {
     const systemPrompt = this.buildSystemPrompt(userContext);
     const adherenceScore = this.calculateCompletionRate(userContext);
-    
+
     return `${systemPrompt}
 
 TASK: Generate personalized wellness insights and recommendations.
@@ -126,7 +126,7 @@ Focus on being encouraging while providing practical, science-based advice tailo
 
   static buildSupplementRecommendationsPrompt(userContext: UserContext): string {
     const systemPrompt = this.buildSystemPrompt(userContext);
-    
+
     return `${systemPrompt}
 
 TASK: Analyze the user's current supplement routine and provide evidence-based recommendations.
@@ -165,7 +165,7 @@ Base all recommendations on current scientific evidence and the user's specific 
 
   static buildQuestionResponsePrompt(question: string, userContext: UserContext): string {
     const systemPrompt = this.buildSystemPrompt(userContext);
-    
+
     return `${systemPrompt}
 
 USER QUESTION: "${question}"
@@ -185,116 +185,56 @@ Provide a direct, helpful response to their question based on their profile and 
   }
 }
 
-class FirebaseGeminiService {
-  private initialized = false;
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+class GeminiService {
+  private genAI: GoogleGenerativeAI | null = null;
+  private model: any = null;
   private contextBuilder = UserContextBuilder;
-  private initializationPromise: Promise<boolean> | null = null;
   private apiKey: string;
-  private model = 'gemini-1.5-flash';
+  private modelName = 'gemini-2.5-flash-lite'; // Using a stable model
 
   constructor() {
     this.apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
-  }
-
-  async initialize() {
-    if (this.initializationPromise) {
-      return this.initializationPromise;
-    }
-
-    this.initializationPromise = this.performInitialization();
-    return this.initializationPromise;
-  }
-
-  private async performInitialization(): Promise<boolean> {
-    try {
-      if (!this.apiKey || this.apiKey === 'your-gemini-api-key-here') {
-        console.warn('⚠️ Gemini API key not configured');
-        console.info('💡 To enable AI: Get a free API key from https://aistudio.google.com/app/apikey');
-        console.info('💡 Then add it to your .env file as VITE_GEMINI_API_KEY=your-key-here');
-        this.initialized = false;
-        return false;
+    if (this.apiKey && this.apiKey !== 'your-gemini-api-key-here') {
+      try {
+        this.genAI = new GoogleGenerativeAI(this.apiKey);
+        this.model = this.genAI.getGenerativeModel({ model: this.modelName });
+      } catch (error) {
+        console.error("Failed to initialize Gemini SDK:", error);
       }
-
-      console.log('Testing Gemini API connection...');
-      await this.callGeminiAPI('Reply with just the word "ok".');
-
-      this.initialized = true;
-      console.log('✅ Gemini API initialized successfully');
-      return true;
-    } catch (error: any) {
-      console.warn('⚠️ Gemini API initialization failed:', error.message);
-
-      if (error.message?.includes('400') || error.message?.includes('INVALID')) {
-        console.error('❌ Invalid API key - Check https://aistudio.google.com/app/apikey');
-      } else if (error.message?.includes('403')) {
-        console.error('❌ API key missing permissions');
-      } else if (error.message?.includes('429') || error.message?.includes('QUOTA')) {
-        console.error('❌ API quota exceeded');
-      }
-
-      this.initialized = false;
-      return false;
+    } else {
+      console.warn('⚠️ Gemini API key not configured or invalid');
     }
   }
 
-  private async callGeminiAPI(prompt: string): Promise<string> {
-    if (!this.apiKey || this.apiKey === 'your-gemini-api-key-here') {
-      throw new Error('Gemini API key not configured');
-    }
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 2048,
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API error ${response.status}: ${errorData.error?.message || response.statusText}`);
-    }
-
-    const data = await response.json();
-    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      throw new Error('Invalid response format');
-    }
-
-    return data.candidates[0].content.parts[0].text;
+  // Helper to check if AI is available without making a call
+  isAvailable(): boolean {
+    return !!this.model;
   }
 
   private async callGemini(prompt: string): Promise<string> {
-    if (!this.initialized) {
-      throw new Error('Gemini API not initialized');
+    if (!this.model) {
+      throw new Error('Gemini API not initialized or key missing');
     }
 
     try {
-      return await this.callGeminiAPI(prompt);
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
     } catch (error: any) {
       console.error('Gemini API call failed:', error);
 
       if (error.message?.includes('429') || error.message?.includes('QUOTA')) {
         throw new Error('API quota exceeded');
       }
-      if (error.message?.includes('400')) {
-        throw new Error('Invalid API key');
-      }
-
       throw error;
     }
   }
 
   async generatePersonalizedSchedule(userContext: UserContext): Promise<any> {
-    if (!this.initialized) {
-      console.log('Using mock schedule - Firebase AI Logic not available');
+    if (!this.isAvailable()) {
+      console.log('Using mock schedule - Gemini AI not available');
       return this.getMockSchedule();
     }
 
@@ -328,11 +268,12 @@ Respond in valid JSON format with this exact structure:
 Create an optimized schedule based on their current routine.`;
 
       const response = await this.callGemini(prompt);
-      
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+
       try {
-        return JSON.parse(response);
+        return JSON.parse(cleanedResponse);
       } catch (parseError) {
-        console.warn('Failed to parse Firebase AI Logic response as JSON, using mock data');
+        console.warn('Failed to parse Gemini response as JSON, using mock data');
         return this.getMockSchedule();
       }
     } catch (error) {
@@ -342,8 +283,8 @@ Create an optimized schedule based on their current routine.`;
   }
 
   async generateWellnessRoutine(userProfile: any, preferences: any): Promise<any> {
-    if (!this.initialized) {
-      console.log('Using mock wellness routine - Firebase AI Logic not available');
+    if (!this.isAvailable()) {
+      console.log('Using mock wellness routine - Gemini AI not available');
       return this.getMockWellnessRoutine();
     }
 
@@ -376,11 +317,12 @@ Respond in valid JSON format with this exact structure:
 Focus on evidence-based practices that can be easily integrated into daily life.`;
 
       const response = await this.callGemini(prompt);
-      
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+
       try {
-        return JSON.parse(response);
+        return JSON.parse(cleanedResponse);
       } catch (parseError) {
-        console.warn('Failed to parse Firebase AI Logic response as JSON, using mock data');
+        console.warn('Failed to parse Gemini response as JSON, using mock data');
         return this.getMockWellnessRoutine();
       }
     } catch (error) {
@@ -390,9 +332,8 @@ Focus on evidence-based practices that can be easily integrated into daily life.
   }
 
   async generateInsights(userContext: UserContext): Promise<any> {
-    // Always return mock insights if Firebase AI Logic is not available
-    if (!this.initialized) {
-      console.log('Using mock insights - Firebase AI Logic not available');
+    if (!this.isAvailable()) {
+      console.log('Using mock insights - Gemini AI not available');
       return this.getMockInsights(userContext);
     }
 
@@ -400,10 +341,11 @@ Focus on evidence-based practices that can be easily integrated into daily life.
       const prompt = this.contextBuilder.buildInsightsPrompt(userContext);
       console.log('Generating AI insights...');
       const response = await this.callGemini(prompt);
-      
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+
       try {
-        const parsed = JSON.parse(response);
-        
+        const parsed = JSON.parse(cleanedResponse);
+
         // Validate the response structure
         if (!parsed.adherenceScore && parsed.adherenceScore !== 0) {
           parsed.adherenceScore = this.contextBuilder.calculateCompletionRate(userContext);
@@ -414,28 +356,27 @@ Focus on evidence-based practices that can be easily integrated into daily life.
         if (!Array.isArray(parsed.recommendations)) {
           parsed.recommendations = [];
         }
-        
+
         console.log('AI insights generated successfully:', parsed);
         return parsed;
       } catch (parseError) {
-        console.warn('Failed to parse Firebase AI Logic response as JSON, using mock data');
+        console.warn('Failed to parse Gemini response as JSON, using mock data');
         return this.getMockInsights(userContext);
       }
     } catch (error) {
       console.error('Failed to generate insights:', error);
-      
-      // Check for specific API errors and provide helpful feedback
-      if (error.message && error.message.includes('QUOTA_EXCEEDED')) {
-        console.warn('Gemini API quota exceeded. Using mock insights. Please check your API usage limits.');
+
+      if (error instanceof Error && error.message.includes('API quota exceeded')) {
+        console.warn('Gemini API quota exceeded. Using mock insights.');
       }
-      
+
       return this.getMockInsights(userContext);
     }
   }
 
   async generateSupplementRecommendations(userContext: UserContext): Promise<any> {
-    if (!this.initialized) {
-      console.log('Using mock supplement recommendations - Firebase AI Logic not available');
+    if (!this.isAvailable()) {
+      console.log('Using mock supplement recommendations - Gemini AI not available');
       return this.getMockSupplementRecommendations(userContext);
     }
 
@@ -443,44 +384,43 @@ Focus on evidence-based practices that can be easily integrated into daily life.
       const prompt = this.contextBuilder.buildSupplementRecommendationsPrompt(userContext);
       console.log('Generating supplement recommendations with AI...');
       const response = await this.callGemini(prompt);
-      
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+
       try {
-        const parsed = JSON.parse(response);
-        
+        const parsed = JSON.parse(cleanedResponse);
+
         // Validate and clean the response
-        const cleanedResponse = {
-          gaps: Array.isArray(parsed.gaps) ? parsed.gaps.filter(gap => gap && typeof gap === 'string') : [],
-          optimizations: Array.isArray(parsed.optimizations) ? parsed.optimizations.filter(opt => opt && typeof opt === 'string') : [],
-          newSuggestions: Array.isArray(parsed.newSuggestions) ? parsed.newSuggestions.filter(suggestion => 
-            suggestion && 
-            typeof suggestion === 'object' && 
-            suggestion.name && 
+        const cleanedData = {
+          gaps: Array.isArray(parsed.gaps) ? parsed.gaps.filter((gap: any) => gap && typeof gap === 'string') : [],
+          optimizations: Array.isArray(parsed.optimizations) ? parsed.optimizations.filter((opt: any) => opt && typeof opt === 'string') : [],
+          newSuggestions: Array.isArray(parsed.newSuggestions) ? parsed.newSuggestions.filter((suggestion: any) =>
+            suggestion &&
+            typeof suggestion === 'object' &&
+            suggestion.name &&
             suggestion.reason
           ) : []
         };
-        
-        console.log('AI recommendations generated successfully:', cleanedResponse);
-        return cleanedResponse;
+
+        console.log('AI recommendations generated successfully:', cleanedData);
+        return cleanedData;
       } catch (parseError) {
-        console.warn('Failed to parse Firebase AI Logic response as JSON, using mock data');
+        console.warn('Failed to parse Gemini response as JSON, using mock data');
         return this.getMockSupplementRecommendations(userContext);
       }
     } catch (error) {
       console.error('Failed to generate supplement recommendations:', error);
-      
-      // Check for specific API errors
-      if (error.message && error.message.includes('QUOTA_EXCEEDED')) {
+
+      if (error instanceof Error && error.message.includes('API quota exceeded')) {
         console.warn('Gemini API quota exceeded. Using mock recommendations.');
         return this.getMockSupplementRecommendations(userContext);
       }
-      
-      // For other errors, throw to be handled by the UI
+
       throw new Error('Unable to generate AI recommendations at this time. Please try again later.');
     }
   }
 
   async generateTextResponse(prompt: string, context: UserContext): Promise<string> {
-    if (!this.initialized) {
+    if (!this.isAvailable()) {
       return "AI features are currently unavailable. Please configure your Gemini API key to enable them.";
     }
 
@@ -490,7 +430,7 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     } catch (error) {
       console.error('Failed to generate text response:', error);
 
-      if (error.message?.includes('quota')) {
+      if (error instanceof Error && error.message.includes('API quota exceeded')) {
         return "API quota exceeded. Please try again later.";
       }
 
@@ -501,10 +441,6 @@ Focus on evidence-based practices that can be easily integrated into daily life.
   // Helper methods
   private calculateCompletionRate(userContext: UserContext): number {
     return this.contextBuilder.calculateCompletionRate(userContext);
-  }
-
-  private analyzeRecentTrends(userContext: UserContext): string {
-    return this.contextBuilder.getRecentActivitySummary(userContext);
   }
 
   // Enhanced mock data fallbacks with user context awareness
@@ -557,7 +493,7 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     const hasSupplements = userContext.supplements.length > 0;
     const hasWellness = userContext.wellness.length > 0;
     const hasHistory = userContext.history.length > 0;
-    
+
     const insights = [];
     const recommendations = [];
 
@@ -598,7 +534,7 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     }
 
     recommendations.push('Track your energy levels and mood to identify which practices have the biggest impact on your well-being.');
-    
+
     return {
       adherenceScore,
       insights: insights.slice(0, 4), // Limit to 4 insights
@@ -616,9 +552,9 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     }
 
     const currentSupplements = userContext.supplements.map(s => s.name.toLowerCase());
-    const gaps = [];
-    const optimizations = [];
-    const newSuggestions = [];
+    const gaps: string[] = [];
+    const optimizations: string[] = [];
+    const newSuggestions: any[] = [];
 
     // Check for common supplement gaps based on what they don't have
     const commonSupplements = [
@@ -631,11 +567,11 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     ];
 
     commonSupplements.forEach(supplement => {
-      const hasThis = currentSupplements.some(current => 
+      const hasThis = currentSupplements.some(current =>
         current.includes(supplement.name.toLowerCase().replace(/[0-9]/g, '').trim()) ||
         supplement.name.toLowerCase().replace(/[0-9]/g, '').trim().includes(current)
       );
-      
+
       if (!hasThis) {
         gaps.push(`Consider adding ${supplement.name} - ${supplement.reason}`);
       }
@@ -645,11 +581,11 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     if (currentSupplements.some(s => s.includes('vitamin d'))) {
       optimizations.push('Take Vitamin D with healthy fats (like avocado or nuts) for 30% better absorption');
     }
-    
+
     if (currentSupplements.some(s => s.includes('iron')) && currentSupplements.some(s => s.includes('calcium'))) {
       optimizations.push('Space iron and calcium supplements 2+ hours apart to prevent absorption interference');
     }
-    
+
     if (currentSupplements.some(s => s.includes('magnesium'))) {
       optimizations.push('Consider taking magnesium in the evening to support better sleep quality');
     } else {
@@ -693,75 +629,33 @@ Focus on evidence-based practices that can be easily integrated into daily life.
 }
 
 // Create service instance
-export const firebaseGeminiService = new FirebaseGeminiService();
+export const apiGeminiService = new GeminiService();
+
+// Export the main service defined as apiGeminiService to replace firebaseGeminiService usage
+export const firebaseGeminiService = apiGeminiService;
 
 // Enhanced mock service for development/fallback
 export const mockGeminiService = {
   async generatePersonalizedSchedule(userContext: UserContext) {
-    return {
-      morning: [
-        { time: '07:00', task: 'Vitamin D3', type: 'supplement', reasoning: 'Best absorbed in morning with fats' },
-        { time: '07:30', task: 'Morning Meditation', type: 'wellness', reasoning: 'Sets positive tone for the day' }
-      ],
-      afternoon: [
-        { time: '12:00', task: 'Omega-3', type: 'supplement', reasoning: 'With lunch for optimal absorption' }
-      ],
-      evening: [
-        { time: '19:00', task: 'Magnesium', type: 'supplement', reasoning: 'Promotes relaxation and sleep' },
-        { time: '20:00', task: 'Journaling', type: 'wellness', reasoning: 'Reflection and stress relief' }
-      ]
-    };
+    return apiGeminiService.generatePersonalizedSchedule(userContext);
   },
 
   async generateWellnessRoutine(userProfile: any, preferences: any) {
-    return {
-      routine: [
-        {
-          name: 'Morning Energizer',
-          activities: ['5-minute breathing', 'Stretching', 'Hydration'],
-          duration: 15,
-          timeOfDay: 'morning'
-        }
-      ]
-    };
+    return apiGeminiService.generateWellnessRoutine(userProfile, preferences);
   },
 
   async generateInsights(userContext: UserContext) {
-    const adherenceScore = UserContextBuilder.calculateCompletionRate(userContext);
-    
-    return {
-      adherenceScore,
-      insights: [
-        'Your supplement adherence has improved by 15% this week',
-        'Consider adding a midday wellness check-in for better consistency',
-        'Your evening routine shows the highest completion rate'
-      ],
-      recommendations: [
-        'Try taking your Omega-3 with a meal for better absorption',
-        'Your stress levels might benefit from an additional breathing exercise'
-      ]
-    };
+    return apiGeminiService.generateInsights(userContext);
   },
 
   async generateSupplementRecommendations(userContext: UserContext) {
-    return {
-      gaps: ['Consider adding Vitamin B12 for energy support'],
-      optimizations: ['Take Vitamin D with healthy fats for better absorption'],
-      newSuggestions: [
-        {
-          name: 'Ashwagandha',
-          reason: 'May help with stress management',
-          timing: 'evening',
-          dosage: '300-500mg'
-        }
-      ]
-    };
+    return apiGeminiService.generateSupplementRecommendations(userContext);
   },
 
   async generateTextResponse(prompt: string, context: UserContext) {
-    return "Based on your current routine, I recommend taking your new supplement with breakfast for optimal absorption.";
+    return apiGeminiService.generateTextResponse(prompt, context);
   }
 };
 
-// Export the main service (will use Firebase AI Logic when available, fallback to mock)
-export const geminiService = firebaseGeminiService;
+// Export the main service
+export const geminiService = apiGeminiService;

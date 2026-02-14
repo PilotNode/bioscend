@@ -52,30 +52,57 @@ const Settings: React.FC = () => {
             </div>
             <button
               onClick={toggleAI}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${
-                state.aiEnabled 
-                  ? 'bg-primary-500 shadow-glow' 
-                  : 'bg-gray-600'
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.aiEnabled
+                ? 'bg-primary-500 shadow-glow'
+                : 'bg-gray-600'
+                }`}
             >
               <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${
-                  state.aiEnabled ? 'translate-x-7' : 'translate-x-1'
-                }`}
+                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.aiEnabled ? 'translate-x-7' : 'translate-x-1'
+                  }`}
               />
             </button>
           </div>
-          
+
           {state.aiEnabled && (
-            <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
-              <div className="flex items-center space-x-2 mb-2">
-                <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium text-primary-500">AI Active</span>
+            <div className="space-y-4">
+              <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
+                <div className="flex items-center space-x-2 mb-2">
+                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium text-primary-500">AI Active</span>
+                </div>
+                <p className="text-sm text-gray-400">
+                  AI features are currently enabled. You'll receive personalized insights,
+                  recommendations, and smart scheduling suggestions.
+                </p>
               </div>
-              <p className="text-sm text-gray-400">
-                AI features are currently enabled. You'll receive personalized insights, 
-                recommendations, and smart scheduling suggestions.
-              </p>
+
+              {/* Model Selection */}
+              <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  AI Model
+                </label>
+                <select
+                  className="w-full bg-surface-base border border-surface-overlay rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary-500"
+                  onChange={(e) => {
+                    // We'll handle this in AppContext later, or import service directly
+                    import('../lib/openrouter').then(({ openRouterService }) => {
+                      openRouterService.setModel(e.target.value);
+                      // Force re-render or save pref found in future
+                    });
+                  }}
+                  defaultValue="nvidia/nemotron-3-nano-30b-a3b:free"
+                >
+                  <option value="nvidia/nemotron-3-nano-30b-a3b:free">Nvidia Nemotron 30B (Free)</option>
+                  <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite (Free)</option>
+                  <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini 2.0 Pro Exp (Free)</option>
+                  <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B Instruct (Free)</option>
+                  <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini (Free)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-2">
+                  Select the AI model used for generating insights and recommendations.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -97,16 +124,14 @@ const Settings: React.FC = () => {
             </div>
             <button
               onClick={handleNotificationToggle}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${
-                state.notifications 
-                  ? 'bg-primary-500 shadow-glow' 
-                  : 'bg-gray-600'
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.notifications
+                ? 'bg-primary-500 shadow-glow'
+                : 'bg-gray-600'
+                }`}
             >
               <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${
-                  state.notifications ? 'translate-x-7' : 'translate-x-1'
-                }`}
+                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.notifications ? 'translate-x-7' : 'translate-x-1'
+                  }`}
               />
             </button>
           </div>
@@ -127,16 +152,14 @@ const Settings: React.FC = () => {
             </div>
             <button
               onClick={handleDarkModeToggle}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${
-                state.darkMode 
-                  ? 'bg-primary-500 shadow-glow' 
-                  : 'bg-gray-600'
-              }`}
+              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.darkMode
+                ? 'bg-primary-500 shadow-glow'
+                : 'bg-gray-600'
+                }`}
             >
               <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${
-                  state.darkMode ? 'translate-x-7' : 'translate-x-1'
-                }`}
+                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.darkMode ? 'translate-x-7' : 'translate-x-1'
+                  }`}
               />
             </button>
           </div>
@@ -166,8 +189,8 @@ const Settings: React.FC = () => {
           <h2 className="text-base md:text-lg font-semibold text-white">Account</h2>
         </div>
         <div className="space-y-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="w-full text-warning border-warning hover:bg-warning hover:text-white"
             onClick={() => setShowLogoutModal(true)}
           >
@@ -188,14 +211,14 @@ const Settings: React.FC = () => {
             Are you sure you want to sign out? You'll need to sign in again to access your data.
           </p>
           <div className="flex space-x-3">
-            <Button 
+            <Button
               onClick={handleLogout}
               className="flex-1 bg-warning hover:bg-warning/80"
             >
               Yes, Sign Out
             </Button>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               onClick={() => setShowLogoutModal(false)}
               className="flex-1"
             >

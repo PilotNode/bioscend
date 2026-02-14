@@ -14,6 +14,7 @@ interface BioScendDB extends DBSchema {
       createdAt: Date;
       updatedAt: Date;
     };
+    indexes: { 'userId': string };
   };
   wellness: {
     key: string;
@@ -28,6 +29,7 @@ interface BioScendDB extends DBSchema {
       createdAt: Date;
       updatedAt: Date;
     };
+    indexes: { 'userId': string };
   };
   completions: {
     key: string;
@@ -39,6 +41,7 @@ interface BioScendDB extends DBSchema {
       userId: string;
       date: string;
     };
+    indexes: { 'userId': string; 'date': string };
   };
   history: {
     key: string;
@@ -62,6 +65,7 @@ interface BioScendDB extends DBSchema {
       userId: string;
       createdAt: Date;
     };
+    indexes: { 'userId': string; 'date': string; 'itemId': string; 'completedAt': Date };
   };
   schedule: {
     key: string;
@@ -78,6 +82,7 @@ interface BioScendDB extends DBSchema {
       createdAt: Date;
       updatedAt: Date;
     };
+    indexes: { 'userId': string; 'date': string; 'itemId': string };
   };
   settings: {
     key: string;
@@ -89,6 +94,19 @@ interface BioScendDB extends DBSchema {
       timezone: string;
       updatedAt: Date;
     };
+  };
+  memories: {
+    key: string;
+    value: {
+      id: string;
+      userId: string;
+      content: string;
+      type: 'user_preference' | 'conversation_context' | 'important_fact';
+      createdAt: Date;
+      updatedAt: Date;
+      synced?: boolean;
+    };
+    indexes: { 'userId': string; 'key': string };
   };
 }
 
@@ -103,18 +121,24 @@ export const getDB = () => {
           const supplementStore = db.createObjectStore('supplements', { keyPath: 'id' });
           supplementStore.createIndex('userId', 'userId');
         }
-        
+
         if (!db.objectStoreNames.contains('wellness')) {
           const wellnessStore = db.createObjectStore('wellness', { keyPath: 'id' });
           wellnessStore.createIndex('userId', 'userId');
         }
-        
+
         if (!db.objectStoreNames.contains('completions')) {
-          const completionsStore = db.createObjectStore('completions', { keyPath: 'id' });
-          completionsStore.createIndex('userId', 'userId');
-          completionsStore.createIndex('date', 'date');
+          const completionStore = db.createObjectStore('completions', { keyPath: 'id' });
+          completionStore.createIndex('userId', 'userId', { unique: false });
+          completionStore.createIndex('date', 'date', { unique: false });
         }
-        
+
+        if (!db.objectStoreNames.contains('memories')) {
+          const memoryStore = db.createObjectStore('memories', { keyPath: 'id' });
+          memoryStore.createIndex('userId', 'userId', { unique: false });
+          memoryStore.createIndex('key', 'key', { unique: false });
+        }
+
         // Add history store in version 3
         if (oldVersion < 3 && !db.objectStoreNames.contains('history')) {
           const historyStore = db.createObjectStore('history', { keyPath: 'id' });
@@ -123,7 +147,7 @@ export const getDB = () => {
           historyStore.createIndex('itemId', 'itemId');
           historyStore.createIndex('completedAt', 'completedAt');
         }
-        
+
         // Add schedule store in version 2
         if (oldVersion < 2 && !db.objectStoreNames.contains('schedule')) {
           const scheduleStore = db.createObjectStore('schedule', { keyPath: 'id' });
@@ -131,7 +155,7 @@ export const getDB = () => {
           scheduleStore.createIndex('date', 'date');
           scheduleStore.createIndex('itemId', 'itemId');
         }
-        
+
         if (!db.objectStoreNames.contains('settings')) {
           db.createObjectStore('settings', { keyPath: 'userId' });
         }
@@ -146,47 +170,47 @@ export const offlineStorage = {
     const db = await getDB();
     await db.add('supplements', supplement);
   },
-  
+
   async getSupplements(userId: string) {
     const db = await getDB();
     return db.getAllFromIndex('supplements', 'userId', userId);
   },
-  
+
   async updateSupplement(supplement: any) {
     const db = await getDB();
     await db.put('supplements', supplement);
   },
-  
+
   async deleteSupplement(id: string) {
     const db = await getDB();
     await db.delete('supplements', id);
   },
-  
+
   async addWellness(wellness: any) {
     const db = await getDB();
     await db.add('wellness', wellness);
   },
-  
+
   async getWellness(userId: string) {
     const db = await getDB();
     return db.getAllFromIndex('wellness', 'userId', userId);
   },
-  
+
   async updateWellness(wellness: any) {
     const db = await getDB();
     await db.put('wellness', wellness);
   },
-  
+
   async deleteWellness(id: string) {
     const db = await getDB();
     await db.delete('wellness', id);
   },
-  
+
   async addCompletion(completion: any) {
     const db = await getDB();
     await db.add('completions', completion);
   },
-  
+
   async getCompletions(userId: string, date?: string) {
     const db = await getDB();
     if (date) {
@@ -194,13 +218,13 @@ export const offlineStorage = {
     }
     return db.getAllFromIndex('completions', 'userId', userId);
   },
-  
+
   // History methods
   async addHistoryEntry(historyEntry: any) {
     const db = await getDB();
     await db.put('history', historyEntry);
   },
-  
+
   async getHistory(userId: string, startDate?: string, endDate?: string) {
     const db = await getDB();
     if (startDate && endDate) {
@@ -210,23 +234,23 @@ export const offlineStorage = {
     }
     return db.getAllFromIndex('history', 'userId', userId);
   },
-  
+
   async updateHistoryEntry(historyEntry: any) {
     const db = await getDB();
     await db.put('history', historyEntry);
   },
-  
+
   async deleteHistoryEntry(id: string) {
     const db = await getDB();
     await db.delete('history', id);
   },
-  
+
   // Schedule methods
   async addScheduleItem(scheduleItem: any) {
     const db = await getDB();
     await db.put('schedule', scheduleItem);
   },
-  
+
   async getScheduleItems(userId: string, date?: string) {
     const db = await getDB();
     if (date) {
@@ -234,24 +258,35 @@ export const offlineStorage = {
     }
     return db.getAllFromIndex('schedule', 'userId', userId);
   },
-  
+
   async updateScheduleItem(scheduleItem: any) {
     const db = await getDB();
     await db.put('schedule', scheduleItem);
   },
-  
+
   async deleteScheduleItem(id: string) {
     const db = await getDB();
     await db.delete('schedule', id);
   },
-  
+
   async getSettings(userId: string) {
     const db = await getDB();
     return db.get('settings', userId);
   },
-  
+
   async updateSettings(settings: any) {
     const db = await getDB();
     await db.put('settings', settings);
+  },
+
+  // Memory methods
+  async addMemory(memory: any) {
+    const db = await getDB();
+    await db.put('memories', memory);
+  },
+
+  async getMemories(userId: string) {
+    const db = await getDB();
+    return db.getAllFromIndex('memories', 'userId', userId);
   }
 };

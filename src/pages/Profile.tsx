@@ -20,7 +20,11 @@ const Profile: React.FC = () => {
     height: '',
     weight: '',
     goals: '',
-    timezone: 'UTC'
+    timezone: 'UTC',
+    ageGroup: '',
+    currentSupplementLevel: '',
+    preferredActivities: '',
+    schedulePreference: ''
   });
 
   // Load profile data from state when it changes
@@ -33,7 +37,11 @@ const Profile: React.FC = () => {
         height: state.profile.height || '',
         weight: state.profile.weight || '',
         goals: state.profile.goals || '',
-        timezone: state.profile.timezone || 'UTC'
+        timezone: state.profile.timezone || 'UTC',
+        ageGroup: state.profile.ageGroup || '',
+        currentSupplementLevel: state.profile.currentSupplementLevel || '',
+        preferredActivities: state.profile.preferredActivities || '',
+        schedulePreference: state.profile.schedulePreference || ''
       });
     }
   }, [state.profile]);
@@ -50,21 +58,21 @@ const Profile: React.FC = () => {
   const calculateStreak = () => {
     let streak = 0;
     const today = new Date();
-    
+
     for (let i = 0; i < 30; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = format(date, 'yyyy-MM-dd');
       const dayCompletions = state.completions.filter(c => c.date === dateStr);
       const dayAdherence = totalTasks > 0 ? (dayCompletions.length / totalTasks) * 100 : 0;
-      
+
       if (dayAdherence >= 80) {
         streak++;
       } else {
         break;
       }
     }
-    
+
     return streak;
   };
 
@@ -92,7 +100,11 @@ const Profile: React.FC = () => {
         height: state.profile.height || '',
         weight: state.profile.weight || '',
         goals: state.profile.goals || '',
-        timezone: state.profile.timezone || 'UTC'
+        timezone: state.profile.timezone || 'UTC',
+        ageGroup: state.profile.ageGroup || '',
+        currentSupplementLevel: state.profile.currentSupplementLevel || '',
+        preferredActivities: state.profile.preferredActivities || '',
+        schedulePreference: state.profile.schedulePreference || ''
       });
     }
   };
@@ -105,7 +117,7 @@ const Profile: React.FC = () => {
           <h1 className="text-xl md:text-2xl font-bold text-white">Profile</h1>
           <p className="text-gray-400 mt-1">Manage your personal information and track your progress</p>
         </div>
-        
+
         {!isEditing ? (
           <Button size="sm" onClick={() => setIsEditing(true)}>
             <Edit2 className="w-5 h-5 mr-2" />
@@ -136,7 +148,7 @@ const Profile: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-white">
-                  {profileData.firstName || profileData.lastName 
+                  {profileData.firstName || profileData.lastName
                     ? `${profileData.firstName} ${profileData.lastName}`.trim()
                     : user?.email?.split('@')[0] || 'User'
                   }
@@ -179,6 +191,22 @@ const Profile: React.FC = () => {
                   <option value="GMT">Greenwich Mean Time</option>
                 </select>
               </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Age Group</label>
+                <select
+                  value={profileData.ageGroup}
+                  onChange={(e) => setProfileData({ ...profileData, ageGroup: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                >
+                  <option value="">Select Age Group</option>
+                  <option value="18-25">18-25 years</option>
+                  <option value="26-35">26-35 years</option>
+                  <option value="36-45">36-45 years</option>
+                  <option value="46-55">46-55 years</option>
+                  <option value="55+">55+ years</option>
+                </select>
+              </div>
             </div>
           </Card>
 
@@ -218,6 +246,54 @@ const Profile: React.FC = () => {
               />
             </div>
           </Card>
+
+          {/* Preferences */}
+          <Card>
+            <h3 className="text-lg font-semibold text-white mb-4">Wellness Preferences</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Current Supplement Level</label>
+                  <select
+                    value={profileData.currentSupplementLevel}
+                    onChange={(e) => setProfileData({ ...profileData, currentSupplementLevel: e.target.value })}
+                    disabled={!isEditing}
+                    className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                  >
+                    <option value="">Select Level</option>
+                    <option value="none">No supplements</option>
+                    <option value="few">A few supplements (1-3)</option>
+                    <option value="many">Many supplements (4+)</option>
+                    <option value="unsure">Not sure</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Schedule Preference</label>
+                  <select
+                    value={profileData.schedulePreference}
+                    onChange={(e) => setProfileData({ ...profileData, schedulePreference: e.target.value })}
+                    disabled={!isEditing}
+                    className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                  >
+                    <option value="">Select Preference</option>
+                    <option value="morning">Morning Person</option>
+                    <option value="evening">Evening Person</option>
+                    <option value="throughout">Throughout the Day</option>
+                    <option value="flexible">Flexible</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Preferred Activities</label>
+                <Input
+                  value={profileData.preferredActivities}
+                  onChange={(e) => setProfileData({ ...profileData, preferredActivities: e.target.value })}
+                  disabled={!isEditing}
+                  placeholder="e.g., Meditation, Exercise, Journaling"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Stats Sidebar */}
@@ -253,7 +329,7 @@ const Profile: React.FC = () => {
                 </div>
                 <span className="text-white font-semibold">{currentStreak} days</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <Target className="w-5 h-5 text-secondary-500" />
@@ -261,7 +337,7 @@ const Profile: React.FC = () => {
                 </div>
                 <span className="text-white font-semibold">{state.supplements.length}</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <Award className="w-5 h-5 text-success" />
@@ -269,7 +345,7 @@ const Profile: React.FC = () => {
                 </div>
                 <span className="text-white font-semibold">{state.wellness.length}</span>
               </div>
-              
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <Calendar className="w-5 h-5 text-warning" />
@@ -299,8 +375,8 @@ const Profile: React.FC = () => {
             </div>
           </Card>
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
 
