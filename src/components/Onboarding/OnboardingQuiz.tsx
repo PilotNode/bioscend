@@ -1,9 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { ChevronRight, Check, User, Target, Clock, Activity, Pill, Heart, Sparkles } from 'lucide-react';
 import Button from '../UI/Button';
-import { useApp } from '../../contexts/AppContext';
-import toast from 'react-hot-toast';
 
 interface QuizAnswer {
   id: string;
@@ -25,13 +22,9 @@ interface OnboardingQuizProps {
 }
 
 const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
-  const navigate = useNavigate();
-  const { updateProfile } = useApp();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [isAnimating, setIsAnimating] = useState(false);
-  const [showCompletion, setShowCompletion] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const questions: QuizQuestion[] = [
     {
@@ -114,7 +107,7 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
         if (currentStep < questions.length - 1) {
           setCurrentStep(prev => prev + 1);
         } else {
-          handleComplete();
+          prepareAndComplete();
         }
         setIsAnimating(false);
       }, 300);
@@ -139,14 +132,11 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
         setIsAnimating(false);
       }, 200);
     } else {
-      handleComplete();
+      prepareAndComplete();
     }
   };
 
-  const handleComplete = async () => {
-    setIsAnimating(true);
-    setIsSubmitting(true);
-
+  const prepareAndComplete = () => {
     const profileData = {
       ageGroup: answers.age_group,
       goals: Array.isArray(answers.wellness_goals)
@@ -160,50 +150,14 @@ const OnboardingQuiz: React.FC<OnboardingQuizProps> = ({ onComplete }) => {
       onboardingCompleted: true,
       completedAt: new Date()
     };
-
-    try {
-      await updateProfile(profileData);
-      toast.success('Onboarding complete!');
-
-      setShowCompletion(true);
-      setIsAnimating(false);
-
-      setTimeout(() => {
-        onComplete(profileData);
-        navigate('/');
-      }, 1500);
-    } catch (error) {
-      console.error('Failed to save onboarding data:', error);
-      toast.error('Failed to save profile. Please try again.');
-      setIsAnimating(false);
-      setIsSubmitting(false);
-    }
+    
+    onComplete(profileData);
   };
 
   const currentQuestion = questions[currentStep];
   const progress = ((currentStep + 1) / questions.length) * 100;
   const isMultipleChoice = currentQuestion?.type === 'multiple';
   const hasMultipleAnswers = isMultipleChoice && Array.isArray(answers[currentQuestion.id]) && (answers[currentQuestion.id] as string[]).length > 0;
-
-  if (showCompletion) {
-    return (
-      <div className="min-h-screen bg-surface-base flex items-center justify-center p-4">
-        <div className="max-w-md w-full text-center animate-fade-in">
-          <div className="w-20 h-20 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce-subtle">
-            <Check className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-4">Welcome to BioScend!</h1>
-          <p className="text-gray-400 mb-6">
-            You're all set! We've personalized your experience based on your preferences.
-          </p>
-          <div className="flex items-center justify-center space-x-2 text-primary-500">
-            <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
-            <span className="text-sm">Setting up your dashboard...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-surface-base">

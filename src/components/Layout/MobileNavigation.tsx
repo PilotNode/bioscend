@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { 
-  Home, 
-  Calendar, 
-  Pill, 
-  Heart, 
-  BarChart3, 
-  History, 
+import {
+  Home,
+  Calendar,
+  Pill,
+  Heart,
+  BarChart3,
+  History,
   Settings,
   Brain,
   Menu,
@@ -41,7 +40,7 @@ const MobileNavigation: React.FC = () => {
   return (
     <>
       {/* Mobile Header */}
-      <div className="md:hidden bg-surface-elevated border-b border-surface-raised px-4 py-3 flex items-center justify-between">
+      <div className="md:hidden bg-surface-elevated border-b border-surface-raised px-4 py-3 flex items-center justify-between safe-area-pt">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 bg-gradient-to-r from-primary-500 to-secondary-500 rounded-lg flex items-center justify-center">
             <Brain className="w-5 h-5 text-white" />

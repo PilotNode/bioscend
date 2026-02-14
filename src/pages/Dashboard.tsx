@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp, Target, Award, Plus, BarChart3, History, MessageCircle, Lightbulb, Brain } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar, TrendingUp, Plus, BarChart3, History, MessageCircle, Lightbulb, Brain } from 'lucide-react';
 import { format } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import Card from '../components/UI/Card';
@@ -7,24 +7,28 @@ import ProgressCircle from '../components/UI/ProgressCircle';
 import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
+import { SimpleMarkdown } from '../components/UI/SimpleMarkdown';
 import { useApp } from '../contexts/AppContext';
 
+import { toast } from 'react-hot-toast';
+
 const Dashboard: React.FC = () => {
-  const { 
-    state, 
-    generateAIInsights, 
+  // ... hooks
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+  const {
+    state,
     generateSupplementRecommendations,
     askAIQuestion,
-    addSupplement, 
-    addWellness, 
-    getScheduleItemsForDate 
+    addSupplement,
+    addWellness,
+    getScheduleItemsForDate
   } = useApp();
   const navigate = useNavigate();
   const [showQuickAddModal, setShowQuickAddModal] = useState(false);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showRecommendationsModal, setShowRecommendationsModal] = useState(false);
   const [aiQuestion, setAiQuestion] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
+  // Removed unused aiResponse state
   const [aiLoading, setAiLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<any>(null);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
@@ -36,9 +40,19 @@ const Dashboard: React.FC = () => {
     timeOfDay: 'morning'
   });
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, showAIModal]);
+
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
-  
+
   // Calculate today's progress using schedule items
   const todayScheduleItems = getScheduleItemsForDate(todayStr);
   const totalTasks = todayScheduleItems.length;
@@ -47,10 +61,10 @@ const Dashboard: React.FC = () => {
 
   const supplementsCompleted = todayScheduleItems.filter(item => item.itemType === 'supplement' && item.completed).length;
   const wellnessCompleted = todayScheduleItems.filter(item => item.itemType === 'wellness' && item.completed).length;
-  
+
   const supplementsTotal = todayScheduleItems.filter(item => item.itemType === 'supplement').length;
   const wellnessTotal = todayScheduleItems.filter(item => item.itemType === 'wellness').length;
-  
+
   const supplementsPercent = supplementsTotal > 0 ? Math.round((supplementsCompleted / supplementsTotal) * 100) : 0;
   const wellnessPercent = wellnessTotal > 0 ? Math.round((wellnessCompleted / wellnessTotal) * 100) : 0;
 
@@ -72,7 +86,7 @@ const Dashboard: React.FC = () => {
         timeOfDay: quickAddData.timeOfDay
       });
     }
-    
+
     setShowQuickAddModal(false);
     setQuickAddData({
       name: '',
@@ -84,13 +98,22 @@ const Dashboard: React.FC = () => {
 
   const handleAIQuestion = async () => {
     if (!aiQuestion.trim()) return;
-    
+
+    const userMessage = { role: 'user' as const, content: aiQuestion };
+    setMessages(prev => [...prev, userMessage]);
+    setAiQuestion('');
     setAiLoading(true);
+
     try {
-      const response = await askAIQuestion(aiQuestion);
-      setAiResponse(response);
+      // Pass the *previous* messages as history, excluding the just-added one for now if needed, 
+      // or include it. calling askAIQuestion with history.
+      const history = messages;
+      const response = await askAIQuestion(userMessage.content, history);
+
+      const aiMessage = { role: 'assistant' as const, content: response };
+      setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      setAiResponse('Sorry, I encountered an error processing your question.');
+      toast.error("Failed to get response");
     } finally {
       setAiLoading(false);
     }
@@ -339,21 +362,19 @@ const Dashboard: React.FC = () => {
           <div className="flex bg-surface-raised rounded-xl p-1">
             <button
               onClick={() => setQuickAddType('supplement')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                quickAddType === 'supplement'
-                  ? 'bg-primary-500 text-white shadow-glow'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${quickAddType === 'supplement'
+                ? 'bg-primary-500 text-white shadow-glow'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               Supplement
             </button>
             <button
               onClick={() => setQuickAddType('wellness')}
-              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                quickAddType === 'wellness'
-                  ? 'bg-primary-500 text-white shadow-glow'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${quickAddType === 'wellness'
+                ? 'bg-primary-500 text-white shadow-glow'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               Wellness
             </button>
@@ -421,44 +442,62 @@ const Dashboard: React.FC = () => {
         title="Ask AI Assistant"
         size="lg"
       >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Your Question</label>
+        <div className="flex flex-col h-[60vh]">
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto mb-4 space-y-4 pr-2 custom-scrollbar">
+            {messages.length === 0 && (
+              <div className="text-center text-gray-400 mt-10">
+                <p>Ask me anything about your wellness routine!</p>
+              </div>
+            )}
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl p-4 ${msg.role === 'user'
+                    ? 'bg-primary-600 text-white rounded-tr-none'
+                    : 'bg-surface-raised border border-surface-overlay text-gray-300 rounded-tl-none'
+                    }`}
+                >
+                  <SimpleMarkdown content={msg.content} />
+                </div>
+              </div>
+            ))}
+            {aiLoading && (
+              <div className="flex justify-start">
+                <div className="bg-surface-raised border border-surface-overlay text-gray-300 rounded-2xl rounded-tl-none p-4">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="flex space-x-3 mt-auto pt-4 border-t border-surface-overlay">
             <textarea
               value={aiQuestion}
               onChange={(e) => setAiQuestion(e.target.value)}
-              className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Ask about your supplements, wellness routine, or get personalized advice..."
-              rows={3}
-            />
-          </div>
-
-          {aiResponse && (
-            <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
-              <h4 className="text-sm font-medium text-gray-300 mb-2">AI Response:</h4>
-              <p className="text-gray-300 whitespace-pre-wrap">{aiResponse}</p>
-            </div>
-          )}
-
-          <div className="flex space-x-3">
-            <Button 
-              onClick={handleAIQuestion} 
-              loading={aiLoading}
-              disabled={!aiQuestion.trim()}
-              className="flex-1"
-            >
-              Ask AI
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setShowAIModal(false);
-                setAiQuestion('');
-                setAiResponse('');
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAIQuestion();
+                }
               }}
-              className="flex-1"
+              className="flex-1 px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+              placeholder="Type your message..."
+              rows={1}
+            />
+            <Button
+              onClick={handleAIQuestion}
+              loading={aiLoading}
+              disabled={!aiQuestion.trim() || aiLoading}
+              className="px-6"
             >
-              Close
+              Send
             </Button>
           </div>
         </div>
@@ -588,16 +627,16 @@ const Dashboard: React.FC = () => {
 
             {/* No recommendations case */}
             {(!recommendations.gaps || recommendations.gaps.length === 0) &&
-             (!recommendations.optimizations || recommendations.optimizations.length === 0) &&
-             (!recommendations.newSuggestions || recommendations.newSuggestions.length === 0) && (
-              <div className="text-center py-8">
-                <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Lightbulb className="w-8 h-8 text-success" />
+              (!recommendations.optimizations || recommendations.optimizations.length === 0) &&
+              (!recommendations.newSuggestions || recommendations.newSuggestions.length === 0) && (
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lightbulb className="w-8 h-8 text-success" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Great Job!</h3>
+                  <p className="text-gray-400">Your current supplement routine looks well-balanced. Keep up the excellent work!</p>
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Great Job!</h3>
-                <p className="text-gray-400">Your current supplement routine looks well-balanced. Keep up the excellent work!</p>
-              </div>
-            )}
+              )}
 
             <div className="flex space-x-3 pt-4 border-t border-surface-raised">
               <Button

@@ -2,7 +2,8 @@ import React, { createContext, useContext, useReducer, useEffect, useRef, useCal
 import { useAuth } from './AuthContext';
 import { offlineStorage } from '../lib/indexedDB';
 import { firestoreService } from '../lib/firestore';
-import { firebaseGeminiService } from '../lib/gemini';
+import { openRouterService } from '../lib/openrouter';
+// import { firebaseGeminiService } from '../lib/gemini'; // Deprecated
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -49,8 +50,9 @@ interface AppState {
   wellness: any[];
   completions: any[]; // Legacy - will be phased out
   history: HistoryEntry[]; // New comprehensive history
+  memories: any[]; // AI Memories
   scheduleItems: ScheduleItem[];
-  profile: any;
+  profile: any | null;
   loading: boolean;
   syncStatus: 'online' | 'offline' | 'syncing';
   initialized: boolean;
@@ -58,7 +60,7 @@ interface AppState {
   aiLoading: boolean;
 }
 
-type AppAction = 
+type AppAction =
   | { type: 'SET_AI_ENABLED'; payload: boolean }
   | { type: 'SET_DARK_MODE'; payload: boolean }
   | { type: 'SET_NOTIFICATIONS'; payload: boolean }
@@ -66,6 +68,7 @@ type AppAction =
   | { type: 'SET_WELLNESS'; payload: any[] }
   | { type: 'SET_COMPLETIONS'; payload: any[] }
   | { type: 'SET_HISTORY'; payload: HistoryEntry[] }
+  | { type: 'SET_MEMORIES'; payload: any[] }
   | { type: 'SET_SCHEDULE_ITEMS'; payload: ScheduleItem[] }
   | { type: 'SET_PROFILE'; payload: any }
   | { type: 'SET_LOADING'; payload: boolean }
@@ -81,6 +84,7 @@ type AppAction =
   | { type: 'DELETE_WELLNESS'; payload: string }
   | { type: 'ADD_COMPLETION'; payload: any }
   | { type: 'ADD_HISTORY_ENTRY'; payload: HistoryEntry }
+  | { type: 'ADD_MEMORY'; payload: any }
   | { type: 'REMOVE_HISTORY_ENTRY'; payload: string }
   | { type: 'UPDATE_SCHEDULE_ITEM'; payload: ScheduleItem }
   | { type: 'ADD_SCHEDULE_ITEM'; payload: ScheduleItem }
@@ -95,19 +99,11 @@ const initialState: AppState = {
   wellness: [],
   completions: [],
   history: [],
+  memories: [],
   scheduleItems: [],
-  profile: {
-    firstName: '',
-    lastName: '',
-    age: '',
-    height: '',
-    weight: '',
-    goals: '',
-    timezone: 'UTC',
-    onboardingCompleted: false
-  },
+  profile: null,
   loading: false,
-  syncStatus: 'offline',
+  syncStatus: navigator.onLine ? 'online' : 'offline',
   initialized: false,
   aiInsights: null,
   aiLoading: false
@@ -129,6 +125,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, completions: action.payload };
     case 'SET_HISTORY':
       return { ...state, history: action.payload };
+    case 'SET_MEMORIES':
+      return { ...state, memories: action.payload };
     case 'SET_SCHEDULE_ITEMS':
       return { ...state, scheduleItems: action.payload };
     case 'SET_PROFILE':
@@ -148,7 +146,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'UPDATE_SUPPLEMENT':
       return {
         ...state,
-        supplements: state.supplements.map(s => 
+        supplements: state.supplements.map(s =>
           s.id === action.payload.id ? action.payload : s
         )
       };
@@ -162,7 +160,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'UPDATE_WELLNESS':
       return {
         ...state,
-        wellness: state.wellness.map(w => 
+        wellness: state.wellness.map(w =>
           w.id === action.payload.id ? action.payload : w
         )
       };
@@ -175,10 +173,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, completions: [...state.completions, action.payload] };
     case 'ADD_HISTORY_ENTRY':
       return { ...state, history: [...state.history, action.payload] };
+    case 'ADD_MEMORY':
+      return { ...state, memories: [...state.memories, action.payload] };
     case 'REMOVE_HISTORY_ENTRY':
-      return { 
-        ...state, 
-        history: state.history.filter(entry => entry.id !== action.payload) 
+      return {
+        ...state,
+        history: state.history.filter(entry => entry.id !== action.payload)
       };
     case 'UPDATE_SCHEDULE_ITEM':
       return {
@@ -218,7 +218,7 @@ const getTimeForSchedule = (timeOfDay: string, specificTime?: string): string =>
   if (specificTime) {
     return specificTime;
   }
-  
+
   // Otherwise use default times for time of day
   const timeMap: { [key: string]: string } = {
     morning: '08:00',
@@ -231,7 +231,7 @@ const getTimeForSchedule = (timeOfDay: string, specificTime?: string): string =>
 // Helper function to determine which time block a time belongs to
 const getTimeBlock = (time: string): 'morning' | 'afternoon' | 'evening' => {
   const hour = parseInt(time.split(':')[0]);
-  
+
   if (hour < 12) {
     return 'morning';
   } else if (hour < 18) {
@@ -251,10 +251,11 @@ interface AppContextType {
   updateWellness: (wellness: any) => Promise<void>;
   deleteWellness: (id: string) => Promise<void>;
   addCompletion: (completion: any) => Promise<void>;
+  addMemory: (memory: any) => Promise<void>;
   updateProfile: (profile: any) => Promise<void>;
   generateAIInsights: () => Promise<any>;
   generateSupplementRecommendations: () => Promise<any>;
-  askAIQuestion: (question: string) => Promise<string>;
+  askAIQuestion: (question: string, history?: { role: 'user' | 'assistant', content: string }[]) => Promise<string>;
   toggleAI: () => Promise<void>;
   syncData: () => Promise<void>;
   generateScheduleForDate: (date: string) => Promise<void>;
@@ -286,15 +287,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const previousWellnessRef = useRef<any[]>([]);
 
   // Initialize Firebase AI on app start
-  useEffect(() => {
-    firebaseGeminiService.initialize().then((initialized) => {
-      if (initialized) {
-        console.log('Firebase AI Logic is ready');
-      } else {
-        console.log('Firebase AI Logic not available, using fallback');
-      }
-    });
-  }, []);
+  // Initialize Firebase AI on app start - REMOVED as we use lazy initialization with new SDK
+  // useEffect(() => {
+  //   firebaseGeminiService.initialize().then((initialized) => {
+  //     if (initialized) {
+  //       console.log('Firebase AI Logic is ready');
+  //     } else {
+  //       console.log('Firebase AI Logic not available, using fallback');
+  //     }
+  //   });
+  // }, []);
 
   // Firestore listeners with proper cleanup
   useEffect(() => {
@@ -307,6 +309,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let unsubscribeWellness: (() => void) | undefined;
     let unsubscribeCompletions: (() => void) | undefined;
     let unsubscribeHistory: (() => void) | undefined;
+    let unsubscribeMemories: (() => void) | undefined;
     let unsubscribeSettings: (() => void) | undefined;
     let unsubscribeProfile: (() => void) | undefined;
     let unsubscribeScheduleItems: (() => void) | undefined;
@@ -320,7 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.log('Received supplements from Firestore:', supplements.length);
           dispatch({ type: 'SET_SUPPLEMENTS', payload: supplements });
           // Cache locally
-          supplements.forEach(supplement => offlineStorage.addSupplement(supplement).catch(() => {}));
+          supplements.forEach(supplement => offlineStorage.addSupplement(supplement).catch(() => { }));
         });
 
         // Subscribe to wellness
@@ -328,13 +331,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.log('Received wellness from Firestore:', wellness.length);
           dispatch({ type: 'SET_WELLNESS', payload: wellness });
           // Cache locally
-          wellness.forEach(w => offlineStorage.addWellness(w).catch(() => {}));
+          wellness.forEach(w => offlineStorage.addWellness(w).catch(() => { }));
         });
 
         // Subscribe to history (new comprehensive tracking)
         unsubscribeHistory = firestoreService.subscribeToHistory(user.uid, (history) => {
           console.log('Received history from Firestore:', history.length);
           dispatch({ type: 'SET_HISTORY', payload: history });
+        });
+
+        // Subscribe to memories (AI Memory)
+        unsubscribeMemories = firestoreService.subscribeToMemories(user.uid, (memories) => {
+          console.log('Received memories from Firestore:', memories.length);
+          dispatch({ type: 'SET_MEMORIES', payload: memories });
+          // Cache locally
+          memories.forEach(m => offlineStorage.addMemory(m).catch(() => { }));
         });
 
         // Subscribe to completions (legacy - for backward compatibility)
@@ -346,14 +357,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.log('Received completions from Firestore:', formattedCompletions.length);
           dispatch({ type: 'SET_COMPLETIONS', payload: formattedCompletions });
           // Cache locally
-          formattedCompletions.forEach(c => offlineStorage.addCompletion(c).catch(() => {}));
+          formattedCompletions.forEach(c => offlineStorage.addCompletion(c).catch(() => { }));
         });
 
         // Subscribe to schedule items
         unsubscribeScheduleItems = firestoreService.subscribeToScheduleItems(user.uid, (scheduleItems) => {
           console.log('Received schedule items from Firestore:', scheduleItems.length);
           dispatch({ type: 'SET_SCHEDULE_ITEMS', payload: scheduleItems });
-          
+
           // Track which dates have been generated
           const dates = new Set(scheduleItems.map(item => item.date));
           generatedDatesRef.current = dates;
@@ -389,17 +400,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadOfflineData = async () => {
       try {
-        const [supplements, wellness, completions, settings] = await Promise.all([
+        const [supplements, wellness, completions, settings, memories] = await Promise.all([
           offlineStorage.getSupplements(user.uid),
           offlineStorage.getWellness(user.uid),
           offlineStorage.getCompletions(user.uid),
-          offlineStorage.getSettings(user.uid)
+          offlineStorage.getSettings(user.uid),
+          offlineStorage.getMemories(user.uid)
         ]);
 
         dispatch({ type: 'SET_SUPPLEMENTS', payload: supplements });
         dispatch({ type: 'SET_WELLNESS', payload: wellness });
         dispatch({ type: 'SET_COMPLETIONS', payload: completions });
-        
+        dispatch({ type: 'SET_MEMORIES', payload: memories });
+
         if (settings) {
           dispatch({ type: 'SET_AI_ENABLED', payload: settings.aiEnabled });
           dispatch({ type: 'SET_DARK_MODE', payload: settings.darkMode });
@@ -417,6 +430,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribeWellness?.();
       unsubscribeCompletions?.();
       unsubscribeHistory?.();
+      unsubscribeMemories?.();
       unsubscribeSettings?.();
       unsubscribeProfile?.();
       unsubscribeScheduleItems?.();
@@ -432,7 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const timeoutId = setTimeout(() => {
           generateAIInsights();
         }, 2000);
-        
+
         return () => clearTimeout(timeoutId);
       }
     }
@@ -523,7 +537,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const allDeletedIds = [...deletedSupplementIds, ...deletedWellnessIds];
 
       if (allDeletedIds.length > 0) {
-        const scheduleItemsToRemove = state.scheduleItems.filter(item => 
+        const scheduleItemsToRemove = state.scheduleItems.filter(item =>
           allDeletedIds.includes(item.itemId)
         );
 
@@ -554,7 +568,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.log(`Updating schedule items for ${allUpdated.length} modified source items`);
 
         for (const sourceItem of allUpdated) {
-          const relatedScheduleItems = state.scheduleItems.filter(item => 
+          const relatedScheduleItems = state.scheduleItems.filter(item =>
             item.itemId === sourceItem.id
           );
 
@@ -562,7 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const updatedScheduleItem = {
               ...scheduleItem,
               name: sourceItem.name,
-              details: sourceItem.dosage 
+              details: sourceItem.dosage
                 ? `${sourceItem.dosage} • ${sourceItem.quantity} ${sourceItem.quantity > 1 ? 'pills' : 'pill'}`
                 : `${sourceItem.duration} minutes`,
               time: getTimeForSchedule(sourceItem.timeOfDay, sourceItem.specificTime),
@@ -600,25 +614,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!user) return;
 
     console.log('Starting schedule regeneration...');
-    
+
     try {
       // Clear generated dates cache to force regeneration
       generatedDatesRef.current.clear();
-      
+
       // Generate schedule for today and next 6 days (7 days total)
       const today = new Date();
       const promises = [];
-      
+
       for (let i = 0; i < 7; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() + i);
         const dateStr = format(date, 'yyyy-MM-dd');
         promises.push(generateScheduleForDate(dateStr));
       }
-      
+
       await Promise.all(promises);
       console.log('Schedule regeneration completed');
-      
+
       // Force a re-render by updating a timestamp
       dispatch({ type: 'SET_LOADING', payload: false });
     } catch (error) {
@@ -628,7 +642,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addSupplement = useCallback(async (supplement: any) => {
     if (!user) return;
-    
+
     const newSupplement = {
       ...supplement,
       userId: user.uid,
@@ -699,7 +713,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addWellness = useCallback(async (wellness: any) => {
     if (!user) return;
-    
+
     const newWellness = {
       ...wellness,
       userId: user.uid,
@@ -770,7 +784,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addCompletion = useCallback(async (completion: any) => {
     if (!user) return;
-    
+
     const newCompletion = {
       ...completion,
       id: `temp-${Date.now()}-${Math.random()}`,
@@ -787,7 +801,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await offlineStorage.addCompletion(newCompletion);
         toast.error('Completion saved locally - will sync when online');
       }
-      
+
       dispatch({ type: 'ADD_COMPLETION', payload: newCompletion });
     } catch (error) {
       console.error('Failed to add completion:', error);
@@ -797,11 +811,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, state.syncStatus]);
 
+  const addHistoryEntry = useCallback(async (entry: HistoryEntry) => {
+    if (!user) return;
+
+    // Optimistic update
+    dispatch({ type: 'ADD_HISTORY_ENTRY', payload: entry });
+
+    try {
+      if (state.syncStatus === 'online') {
+        const entryData = {
+          ...entry,
+          synced: true,
+          updatedAt: new Date()
+        };
+        await firestoreService.addHistoryEntry(user.uid, entryData);
+        // Cache locally
+        await offlineStorage.addHistoryEntry(entryData);
+      } else {
+        await offlineStorage.addHistoryEntry({ ...entry, synced: false });
+        // toast.success('History saved locally');
+      }
+    } catch (error) {
+      console.error('Failed to add history entry:', error);
+      // Fallback
+      await offlineStorage.addHistoryEntry({ ...entry, synced: false });
+    }
+  }, [user, state.syncStatus]);
+
+  const addMemory = useCallback(async (memory: any) => {
+    if (!user) return;
+
+    // Optimistic update
+    const newMemory = {
+      ...memory,
+      id: memory.id || `mem_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      userId: user.uid,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    dispatch({ type: 'ADD_MEMORY', payload: newMemory });
+
+    try {
+      if (state.syncStatus === 'online') {
+        const memoryData = {
+          ...newMemory,
+          synced: true
+        };
+        await firestoreService.addMemory(user.uid, memoryData);
+        // Also cache locally
+        await offlineStorage.addMemory(memoryData);
+      } else {
+        await offlineStorage.addMemory({ ...newMemory, synced: false });
+        // toast.success('Memory saved locally');
+      }
+    } catch (error) {
+      console.error('Failed to add memory:', error);
+      // Fallback to local
+      await offlineStorage.addMemory({ ...newMemory, synced: false });
+    }
+  }, [user, state.syncStatus]);
+
   const updateProfile = useCallback(async (profile: any) => {
     if (!user) throw new Error('User not authenticated');
 
+    const currentProfile = state.profile || {};
+
     const updatedProfile = {
-      ...state.profile,
+      ...currentProfile,
       ...profile,
       userId: user.uid,
       updatedAt: new Date()
@@ -810,26 +887,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dispatch({ type: 'SET_PROFILE', payload: updatedProfile });
 
     try {
+      console.log('Attempting to update profile. SyncStatus:', state.syncStatus);
       if (state.syncStatus === 'online') {
         await firestoreService.updateProfile(user.uid, updatedProfile);
         console.log('Profile saved to Firestore');
         toast.success('Profile updated');
       } else {
         await offlineStorage.updateSettings({ ...updatedProfile });
-        toast.error('Profile saved locally - will sync when online');
+        console.log('SyncStatus is not online, saving locally.');
+        toast.success('Profile saved locally (taking effect when online)');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
+      console.log('Error code:', error.code, 'Error message:', error.message);
       await offlineStorage.updateSettings({ ...updatedProfile });
-      toast.error('Profile saved locally - will sync when online');
+      toast.success('Profile saved locally (taking effect when online)');
     }
   }, [user, state.syncStatus, state.profile]);
 
   const generateAIInsights = useCallback(async () => {
     if (!state.aiEnabled || !user) return null;
-    
+
     dispatch({ type: 'SET_AI_LOADING', payload: true });
-    
+
     try {
       const userContext = {
         goals: [state.profile?.goals || 'General wellness'],
@@ -837,10 +917,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         wellness: state.wellness,
         completions: state.completions,
         history: state.history,
+        memories: state.memories,
         profile: { ...state.profile, userId: user.uid }
       };
-      
-      const insights = await firebaseGeminiService.generateInsights(userContext);
+
+      const insights = await openRouterService.generateInsights(userContext);
       dispatch({ type: 'SET_AI_INSIGHTS', payload: insights });
       return insights;
     } catch (error) {
@@ -861,11 +942,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       dispatch({ type: 'SET_AI_LOADING', payload: false });
     }
-  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.profile]);
+  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.memories, state.profile]);
 
   const generateSupplementRecommendations = useCallback(async () => {
     if (!state.aiEnabled || !user) return null;
-    
+
     try {
       const userContext = {
         goals: [state.profile?.goals || 'General wellness'],
@@ -873,29 +954,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         wellness: state.wellness,
         completions: state.completions,
         history: state.history,
+        memories: state.memories, // Pass memories
         profile: { ...state.profile, userId: user.uid }
       };
-      
+
       console.log('Requesting supplement recommendations for user context:', {
         supplementsCount: userContext.supplements.length,
         wellnessCount: userContext.wellness.length,
         historyCount: userContext.history.length,
         goals: userContext.goals
       });
-      
-      return await firebaseGeminiService.generateSupplementRecommendations(userContext);
+
+      return await openRouterService.generateSupplementRecommendations(userContext);
     } catch (error) {
       console.error('Failed to generate supplement recommendations:', error);
       // Re-throw the error so the UI can handle it appropriately
       throw error;
     }
-  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.profile]);
+  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.memories, state.profile]);
 
-  const askAIQuestion = useCallback(async (question: string): Promise<string> => {
+  const askAIQuestion = useCallback(async (question: string, history?: { role: 'user' | 'assistant', content: string }[]): Promise<string> => {
     if (!state.aiEnabled || !user) {
       return "AI features are currently disabled. Please enable AI in settings to ask questions.";
     }
-    
+
     try {
       const userContext = {
         goals: [state.profile?.goals || 'General wellness'],
@@ -903,22 +985,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         wellness: state.wellness,
         completions: state.completions,
         history: state.history,
+        memories: state.memories, // Pass memories
         profile: { ...state.profile, userId: user.uid }
       };
-      
-      return await firebaseGeminiService.generateTextResponse(question, userContext);
+
+      const response = await openRouterService.generateTextResponse(question, userContext, history);
+
+      // Extract memories in the background
+      openRouterService.extractNewMemories(question, response, state.memories)
+        .then(newMemories => {
+          if (newMemories.length > 0) {
+            console.log('AI identified new memories:', newMemories);
+            newMemories.forEach(m => addMemory({
+              content: m.content,
+              type: m.type
+            }));
+          }
+        })
+        .catch(err => console.error('Background memory extraction failed:', err));
+
+      return response;
     } catch (error) {
       console.error('Failed to get AI response:', error);
       return "I'm having trouble processing your question right now. Please try again later.";
     }
-  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.profile]);
+  }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.memories, state.profile, addMemory]);
 
   const toggleAI = useCallback(async () => {
     if (!user) return;
-    
+
     const newAIState = !state.aiEnabled;
     dispatch({ type: 'SET_AI_ENABLED', payload: newAIState });
-    
+
     const settings = {
       userId: user.uid,
       aiEnabled: newAIState,
@@ -945,7 +1043,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       dispatch({ type: 'SET_SYNC_STATUS', payload: 'syncing' });
-      
+
       const [localSupplements, localWellness, localCompletions] = await Promise.all([
         offlineStorage.getSupplements(user.uid),
         offlineStorage.getWellness(user.uid),
@@ -953,19 +1051,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       for (const supplement of localSupplements) {
-        if (!supplement.synced) {
+        if (!(supplement as any).synced) {
           await firestoreService.addSupplement(user.uid, supplement);
         }
       }
 
       for (const wellness of localWellness) {
-        if (!wellness.synced) {
+        if (!(wellness as any).synced) {
           await firestoreService.addWellness(user.uid, wellness);
         }
       }
 
       for (const completion of localCompletions) {
-        if (!completion.synced) {
+        if (!(completion as any).synced) {
           await firestoreService.addCompletion(user.uid, completion);
         }
       }
@@ -994,7 +1092,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     console.log('Generating schedule for date:', date);
     isGeneratingRef.current.add(date);
-    
+
     try {
       const newItems: ScheduleItem[] = [];
 
@@ -1072,11 +1170,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (state.syncStatus === 'online') {
         await firestoreService.updateScheduleItem(scheduleItemId, updatedItem);
-        
+
         // Handle history entry creation/deletion
         if (updatedItem.completed) {
           // Create history entry when marking as completed
-          const sourceItem = scheduleItem.itemType === 'supplement' 
+          const sourceItem = scheduleItem.itemType === 'supplement'
             ? state.supplements.find(s => s.id === scheduleItem.itemId)
             : state.wellness.find(w => w.id === scheduleItem.itemId);
 
@@ -1120,10 +1218,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } else {
           // Remove history entry when marking as undone
-          const existingHistoryEntry = state.history.find(entry => 
+          const existingHistoryEntry = state.history.find(entry =>
             entry.scheduleItemId === scheduleItemId
           );
-          
+
           if (existingHistoryEntry) {
             // Verify the history entry belongs to the current user before attempting deletion
             if (existingHistoryEntry.userId === user.uid) {
@@ -1155,7 +1253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [state.scheduleItems]);
 
   const getHistoryForDateRange = useCallback((startDate: string, endDate: string): HistoryEntry[] => {
-    return state.history.filter(entry => 
+    return state.history.filter(entry =>
       entry.date >= startDate && entry.date <= endDate
     ).sort((a, b) => b.completedAt.getTime() - a.completedAt.getTime());
   }, [state.history]);
@@ -1163,28 +1261,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getAnalyticsData = useCallback((days: number) => {
     const data = [];
     const today = new Date();
-    
+
     for (let i = days - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = format(date, 'yyyy-MM-dd');
-      
+
       // Get history entries for this date
       const dayHistory = state.history.filter(entry => entry.date === dateStr);
-      
+
       // Get scheduled items for this date
       const daySchedule = state.scheduleItems.filter(item => item.date === dateStr);
-      
+
       const totalTasks = daySchedule.length;
       const completedTasks = dayHistory.length;
       const adherencePercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      
+
       const supplementsCompleted = dayHistory.filter(h => h.itemType === 'supplement').length;
       const wellnessCompleted = dayHistory.filter(h => h.itemType === 'wellness').length;
-      
+
       const supplementsScheduled = daySchedule.filter(s => s.itemType === 'supplement').length;
       const wellnessScheduled = daySchedule.filter(s => s.itemType === 'wellness').length;
-      
+
       const supplementsPercent = supplementsScheduled > 0 ? Math.round((supplementsCompleted / supplementsScheduled) * 100) : 0;
       const wellnessPercent = wellnessScheduled > 0 ? Math.round((wellnessCompleted / wellnessScheduled) * 100) : 0;
 
@@ -1198,7 +1296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         history: dayHistory
       });
     }
-    
+
     return data;
   }, [state.history, state.scheduleItems]);
 
@@ -1212,6 +1310,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateWellness,
     deleteWellness,
     addCompletion,
+    addHistoryEntry,
+    addMemory,
     updateProfile,
     generateAIInsights,
     generateSupplementRecommendations,

@@ -1,19 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  User, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+import {
+  User,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   signInWithPopup,
   GoogleAuthProvider,
   linkWithCredential,
-  EmailAuthProvider,
-  fetchSignInMethodsForEmail
+  fetchSignInMethodsForEmail,
+  signInWithCredential
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { firestoreService } from '../lib/firestore';
 import toast from 'react-hot-toast';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 interface AuthContextType {
   user: User | null;
@@ -36,17 +38,19 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const initializingRef = React.useRef<{ [key: string]: boolean }>({});
 
   // Handle auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       console.log('Auth state changed:', user ? `User: ${user.email}` : 'No user');
-      
+
       if (user) {
         // User is signed in
         setUser(user);
-        
+
         // Initialize profile if needed
         try {
           await initializeUserProfile(user);
@@ -57,14 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // User is signed out
         setUser(null);
       }
-      
+
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  const handleAccountMerging = async (googleUser: User, email: string, existingMethods: string[]) => {
+  const handleAccountMerging = async (googleUser: User, email: string) => {
     try {
       // Show a toast asking user to confirm account merging
       const shouldMerge = window.confirm(
@@ -73,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!shouldMerge) {
         await signOut(auth);
-        toast.info('Sign-in cancelled. You can try again anytime.');
+        toast('Sign-in cancelled. You can try again anytime.', { icon: 'ℹ️' });
         return;
       }
 
@@ -84,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!password) {
         await signOut(auth);
-        toast.info('Account merging cancelled.');
+        toast('Account merging cancelled.', { icon: 'ℹ️' });
         return;
       }
 
@@ -93,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Sign in with email/password to verify
       const emailCredential = await signInWithEmailAndPassword(auth, email, password);
-      
+
       // Create Google credential
       const googleCredential = GoogleAuthProvider.credential(
         googleUser.getIdToken ? await googleUser.getIdToken() : null
@@ -107,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } catch (error: any) {
       console.error('Account merging error:', error);
-      
+
       if (error.code === 'auth/wrong-password') {
         toast.error('Incorrect password. Account merging failed.');
       } else if (error.code === 'auth/credential-already-in-use') {
@@ -115,16 +119,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         toast.error('Failed to merge accounts. Please try again.');
       }
-      
+
       // Sign out any partial authentication
       await signOut(auth);
     }
   };
 
   const initializeUserProfile = async (user: User) => {
+    if (initializingRef.current[user.uid]) return;
+    initializingRef.current[user.uid] = true;
+
     try {
       console.log('Initializing user profile for:', user.email);
-      
+
       // Check if user profile exists
       let existingProfile = null;
       try {
@@ -132,19 +139,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.log('Profile does not exist yet, will create new one');
       }
-      
+
       if (!existingProfile) {
+        // Check for local onboarding data
+        const localOnboardingData = localStorage.getItem('onboarding_data');
+        console.log('Local onboarding data found:', !!localOnboardingData);
+        let onboardingData = {};
+
+        if (localOnboardingData) {
+          try {
+            onboardingData = JSON.parse(localOnboardingData);
+            // Clear it after using
+            localStorage.removeItem('onboarding_data');
+          } catch (e) {
+            console.error('Failed to parse local onboarding data', e);
+          }
+        }
+
         const profileData = {
           firstName: user.displayName?.split(' ')[0] || '',
           lastName: user.displayName?.split(' ').slice(1).join(' ') || '',
           email: user.email || '',
           goals: '',
           timezone: 'UTC',
-          onboardingCompleted: false,
+          onboardingCompleted: !!localOnboardingData, // Set to true if we have data
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          ...onboardingData // Merge onboarding data
         };
-        
+
         console.log('Creating new profile:', profileData);
         await firestoreService.updateProfile(user.uid, profileData);
         console.log('Profile created successfully');
@@ -154,17 +177,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Failed to initialize user profile:', error);
       // Don't show error to user as this is not critical for sign-in
+    } finally {
+      initializingRef.current[user.uid] = false;
     }
   };
 
   const login = async (email: string, password: string) => {
     try {
-      const result = await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       toast.success('Welcome back!');
-      await initializeUserProfile(result.user);
+      // initializeUserProfile is handled by onAuthStateChanged
     } catch (error: any) {
       console.error('Login error:', error);
-      
+
       if (error.code === 'auth/user-not-found') {
         toast.error('No account found with this email address.');
       } else if (error.code === 'auth/wrong-password') {
@@ -184,12 +209,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string) => {
     try {
-      const result = await createUserWithEmailAndPassword(auth, email, password);
+      await createUserWithEmailAndPassword(auth, email, password);
       toast.success('Account created successfully!');
-      await initializeUserProfile(result.user);
+      // initializeUserProfile is handled by onAuthStateChanged
     } catch (error: any) {
       console.error('Registration error:', error);
-      
+
       if (error.code === 'auth/email-already-in-use') {
         toast.error('An account with this email already exists.');
       } else if (error.code === 'auth/weak-password') {
@@ -207,56 +232,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Initiating Google sign-in with popup...');
       const provider = new GoogleAuthProvider();
-      
+
       // Add additional scopes if needed
       provider.addScope('email');
       provider.addScope('profile');
-      
+
       // Set custom parameters
       provider.setCustomParameters({
         prompt: 'select_account'
       });
 
-      // Use popup for better user experience and easier debugging
-      const result = await signInWithPopup(auth, provider);
+      let result;
+      if (Capacitor.isNativePlatform()) {
+        const googleUser = await FirebaseAuthentication.signInWithGoogle();
+        const credential = GoogleAuthProvider.credential(googleUser.credential?.idToken);
+        result = await signInWithCredential(auth, credential);
+      } else {
+        // Use popup for better user experience and easier debugging
+        result = await signInWithPopup(auth, provider);
+      }
       const user = result.user;
       const email = user.email;
-      
+
       console.log('Google sign-in successful:', email);
-      
+
       if (email) {
         try {
           // Check if there's an existing account with this email
           const signInMethods = await fetchSignInMethodsForEmail(auth, email);
           console.log('Existing sign-in methods for', email, ':', signInMethods);
-          
+
           if (signInMethods.length > 0 && !signInMethods.includes('google.com')) {
             // There's an existing email/password account
             console.log('Found existing email/password account, attempting merge...');
-            await handleAccountMerging(user, email, signInMethods);
+            await handleAccountMerging(user, email);
           } else {
             // New Google account or existing Google account
             console.log('Processing Google account sign-in...');
             toast.success('Successfully signed in with Google!');
-            await initializeUserProfile(user);
+            // initializeUserProfile is handled by onAuthStateChanged
           }
         } catch (methodsError) {
           console.error('Error checking sign-in methods:', methodsError);
           // If we can't check methods, just proceed with the Google sign-in
           toast.success('Successfully signed in with Google!');
-          await initializeUserProfile(user);
+          // initializeUserProfile is handled by onAuthStateChanged
         }
       }
-      
+
     } catch (error: any) {
       console.error('Google sign-in error:', error);
-      
+
       if (error.code === 'auth/popup-blocked') {
         toast.error('Popup was blocked. Please allow popups and try again.');
       } else if (error.code === 'auth/popup-closed-by-user') {
-        toast.info('Sign-in was cancelled.');
+        toast('Sign-in was cancelled.', { icon: 'ℹ️' });
       } else if (error.code === 'auth/cancelled-popup-request') {
-        toast.info('Sign-in was cancelled.');
+        toast('Sign-in was cancelled.', { icon: 'ℹ️' });
       } else if (error.code === 'auth/unauthorized-domain') {
         toast.error('This domain is not authorized for Google sign-in. Please check your Firebase configuration.');
       } else if (error.code === 'auth/account-exists-with-different-credential') {

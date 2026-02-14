@@ -1,17 +1,18 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  getDocs, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
   getDoc,
-  query, 
-  where, 
+  query,
+  where,
+  limit,
   orderBy,
   onSnapshot,
   Timestamp,
-  setDoc 
+  setDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -62,7 +63,7 @@ export const firestoreService = {
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')
       );
-      
+
       return onSnapshot(q, (snapshot) => {
         const supplements = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -126,7 +127,7 @@ export const firestoreService = {
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')
       );
-      
+
       return onSnapshot(q, (snapshot) => {
         const wellness = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -194,6 +195,54 @@ export const firestoreService = {
     }
   },
 
+  async getCompletions(userId: string) {
+    const q = query(
+      collection(db, 'users', userId, 'completions'),
+      orderBy('completedAt', 'desc'),
+      limit(100) // Limit to last 100 completions for performance
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as any);
+  },
+
+  async addMemory(userId: string, memory: any) {
+    // Ensure memory has an ID
+    const memoryId = memory.id || `memory-${Date.now()}`;
+    const memoryRef = doc(db, 'users', userId, 'memories', memoryId);
+    await setDoc(memoryRef, { ...memory, id: memoryId, updatedAt: new Date() });
+  },
+
+  async getMemories(userId: string) {
+    const q = query(collection(db, 'users', userId, 'memories'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as any);
+  },
+
+  subscribeToMemories(userId: string, callback: (memories: any[]) => void) {
+    try {
+      const q = query(
+        collection(db, 'users', userId, 'memories'),
+        orderBy('createdAt', 'desc')
+      );
+
+      return onSnapshot(q, (snapshot) => {
+        const memories = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate(),
+          updatedAt: doc.data().updatedAt?.toDate()
+        }));
+        callback(memories);
+      }, (error) => {
+        console.error('Error in memories subscription:', error);
+        throw error;
+      });
+    } catch (error) {
+      console.error('Error setting up memories subscription:', error);
+      throw error;
+    }
+  },
+
   subscribeToHistory(userId: string, callback: (history: any[]) => void) {
     try {
       const q = query(
@@ -201,7 +250,7 @@ export const firestoreService = {
         where('userId', '==', userId),
         orderBy('completedAt', 'desc')
       );
-      
+
       return onSnapshot(q, (snapshot) => {
         const history = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -269,7 +318,7 @@ export const firestoreService = {
         orderBy('date', 'desc'),
         orderBy('time', 'asc')
       );
-      
+
       return onSnapshot(q, (snapshot) => {
         const scheduleItems = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -310,7 +359,7 @@ export const firestoreService = {
         where('userId', '==', userId),
         orderBy('completedAt', 'desc')
       );
-      
+
       return onSnapshot(q, (snapshot) => {
         const completions = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -345,12 +394,12 @@ export const firestoreService = {
   subscribeToSettings(userId: string, callback: (settings: any) => void) {
     try {
       const docRef = doc(db, 'settings', userId);
-      
+
       return onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          callback({ 
-            id: doc.id, 
+          callback({
+            id: doc.id,
             ...data,
             updatedAt: data.updatedAt?.toDate()
           });
@@ -395,7 +444,7 @@ export const firestoreService = {
     try {
       const docRef = doc(db, 'profiles', userId);
       const docSnap = await getDoc(docRef);
-      
+
       if (docSnap.exists()) {
         const data = docSnap.data();
         return {
@@ -415,12 +464,12 @@ export const firestoreService = {
   subscribeToProfile(userId: string, callback: (profile: any) => void) {
     try {
       const docRef = doc(db, 'profiles', userId);
-      
+
       return onSnapshot(docRef, (doc) => {
         if (doc.exists()) {
           const data = doc.data();
-          callback({ 
-            id: doc.id, 
+          callback({
+            id: doc.id,
             ...data,
             createdAt: data.createdAt?.toDate(),
             updatedAt: data.updatedAt?.toDate()
