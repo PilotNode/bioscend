@@ -1,1 +1,1 @@
-bioscend
+Bioscend Application
