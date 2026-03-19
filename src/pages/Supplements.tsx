@@ -14,11 +14,30 @@ const Supplements: React.FC = () => {
     name: '',
     dosage: '',
     quantity: 1,
-    schedule: 'daily',
+    daysOfWeek: [] as number[], // empty = every day
     timeOfDay: 'morning',
     specificTime: '',
     useSpecificTime: false
   });
+
+  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const toggleDay = (dayIndex: number) => {
+    setFormData(prev => ({
+      ...prev,
+      daysOfWeek: prev.daysOfWeek.includes(dayIndex)
+        ? prev.daysOfWeek.filter(d => d !== dayIndex)
+        : [...prev.daysOfWeek, dayIndex].sort()
+    }));
+  };
+
+  const isEveryDay = (days: number[]) => days.length === 0;
+
+  const formatDays = (days: number[]) => {
+    if (isEveryDay(days)) return 'Every day';
+    if (days.length === 7) return 'Every day';
+    return days.map(d => DAY_LABELS[d]).join(', ');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +60,7 @@ const Supplements: React.FC = () => {
       name: '',
       dosage: '',
       quantity: 1,
-      schedule: 'daily',
+      daysOfWeek: [],
       timeOfDay: 'morning',
       specificTime: '',
       useSpecificTime: false
@@ -54,7 +73,7 @@ const Supplements: React.FC = () => {
       name: supplement.name,
       dosage: supplement.dosage,
       quantity: supplement.quantity,
-      schedule: supplement.schedule,
+      daysOfWeek: supplement.daysOfWeek || [],
       timeOfDay: supplement.timeOfDay,
       specificTime: supplement.specificTime || '',
       useSpecificTime: !!supplement.specificTime
@@ -68,12 +87,7 @@ const Supplements: React.FC = () => {
     }
   };
 
-  const getDisplayTime = (supplement: any) => {
-    if (supplement.specificTime) {
-      return supplement.specificTime;
-    }
-    return supplement.timeOfDay;
-  };
+
 
   const handleTimeToggle = (useSpecific: boolean) => {
     setFormData({
@@ -130,20 +144,7 @@ const Supplements: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <Clock className="w-4 h-4" />
-                <span>Quantity: {supplement.quantity}</span>
-              </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-400">
-                <span className="capitalize">{supplement.schedule}</span>
-                <span>•</span>
-                <span className="capitalize">
-                  {supplement.specificTime ? (
-                    <span className="text-primary-400 font-medium">
-                      {supplement.specificTime} ({supplement.timeOfDay})
-                    </span>
-                  ) : (
-                    supplement.timeOfDay
-                  )}
-                </span>
+                <span>{formatDays(supplement.daysOfWeek || [])}</span>
               </div>
             </div>
           </Card>
@@ -172,7 +173,7 @@ const Supplements: React.FC = () => {
             name: '',
             dosage: '',
             quantity: 1,
-            schedule: 'daily',
+            daysOfWeek: [],
             timeOfDay: 'morning',
             specificTime: '',
             useSpecificTime: false
@@ -208,19 +209,6 @@ const Supplements: React.FC = () => {
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Schedule</label>
-              <select
-                value={formData.schedule}
-                onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
-                className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            
-            <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Time of Day</label>
               <select
                 value={formData.timeOfDay}
@@ -232,6 +220,30 @@ const Supplements: React.FC = () => {
                 <option value="evening">Evening</option>
               </select>
             </div>
+          </div>
+
+          {/* Day-of-week picker */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Days &nbsp;<span className="text-gray-500 font-normal">(leave all off = every day)</span>
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {DAY_LABELS.map((label, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleDay(i)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    formData.daysOfWeek.includes(i)
+                      ? 'bg-primary-500 border-primary-500 text-white'
+                      : 'bg-surface-raised border-surface-overlay text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">{formatDays(formData.daysOfWeek)}</p>
           </div>
 
           {/* Specific Time Section */}

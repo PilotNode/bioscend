@@ -183,6 +183,29 @@ GUIDELINES FOR RESPONSE:
 
 Provide a direct, helpful response to their question based on their profile and current wellness routine.`;
   }
+
+  static buildInteractionCheckPrompt(supplements: string[]): string {
+    return `You are a clinical nutritionist and expert in pharmacology and biohacking.
+    
+TASK: Analyze the following supplement stack for known interactions, warnings, or synergies based on current medical and nutritional science.
+STACK: [${supplements.join(', ')}]
+
+Focus on identifying:
+1. WARNINGS: Dangerous combinations, conflicting absorptions (e.g., calcium blocking iron), or overlapping toxicity risks. Use severity levels: 'high', 'medium', or 'low'.
+2. SYNERGIES: Supplements that enhance each other's absorption or efficacy (e.g., Vitamin C enhancing iron absorption, Vitamin D + K2).
+
+RESPONSE FORMAT (Strict JSON):
+{
+  "warnings": [
+    { "title": "Supplement A + Supplement B", "description": "Explanation of why they conflict and how to manage it.", "severity": "high|medium|low" }
+  ],
+  "synergies": [
+    { "title": "Supplement C + Supplement D", "description": "Explanation of why they work well together.", "impact": "positive" }
+  ]
+}
+
+If no significant interactions or synergies exist, return empty arrays. Ensure the output is valid JSON without markdown wrapping.`;
+  }
 }
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -438,6 +461,44 @@ Focus on evidence-based practices that can be easily integrated into daily life.
     }
   }
 
+  async checkSupplementInteractions(supplements: string[]): Promise<any> {
+    if (!supplements || supplements.length < 2) {
+      return { warnings: [], synergies: [] };
+    }
+
+    if (!this.isAvailable()) {
+      console.log('Using mock interaction data - Gemini AI not available');
+      return this.getMockInteractions(supplements);
+    }
+
+    try {
+      const prompt = this.contextBuilder.buildInteractionCheckPrompt(supplements);
+      console.log('Generating supplement interaction analysis with AI...');
+      const response = await this.callGemini(prompt);
+      const cleanedResponse = response.replace(/```json/g, '').replace(/```/g, '').trim();
+
+      try {
+        const parsed = JSON.parse(cleanedResponse);
+        return {
+          warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
+          synergies: Array.isArray(parsed.synergies) ? parsed.synergies : []
+        };
+      } catch (parseError) {
+        console.warn('Failed to parse Gemini response as JSON for interactions, using mock data');
+        return this.getMockInteractions(supplements);
+      }
+    } catch (error) {
+      console.error('Failed to analyze supplement interactions:', error);
+      
+      if (error instanceof Error && error.message.includes('API quota exceeded')) {
+        console.warn('Gemini API quota exceeded. Using mock interactions.');
+        return this.getMockInteractions(supplements);
+      }
+      
+      throw new Error('Unable to analyze interactions at this time.');
+    }
+  }
+
   // Helper methods
   private calculateCompletionRate(userContext: UserContext): number {
     return this.contextBuilder.calculateCompletionRate(userContext);
@@ -626,6 +687,49 @@ Focus on evidence-based practices that can be easily integrated into daily life.
       newSuggestions: newSuggestions.slice(0, 3)
     };
   }
+
+  private getMockInteractions(supplements: string[]) {
+    // Basic mock implementation for common combinations
+    const lowerSupps = supplements.map(s => s.toLowerCase());
+    const warnings = [];
+    const synergies = [];
+
+    // Mock warnings
+    if (lowerSupps.some(s => s.includes('iron')) && lowerSupps.some(s => s.includes('calcium'))) {
+      warnings.push({
+        title: "Iron + Calcium",
+        description: "Calcium has been shown to inhibit the absorption of iron. It is recommended to separate their intake by at least 2 hours.",
+        severity: "medium"
+      });
+    }
+
+    if (lowerSupps.some(s => s.includes('zinc')) && lowerSupps.some(s => s.includes('copper'))) {
+        warnings.push({
+          title: "Zinc + Copper",
+          description: "High doses of zinc can interfere with copper absorption. Often they are taken together in a specific ratio or separated if doses are high.",
+          severity: "low"
+        });
+    }
+
+    // Mock synergies
+    if (lowerSupps.some(s => s.includes('iron')) && lowerSupps.some(s => s.includes('vitamin c'))) {
+      synergies.push({
+        title: "Iron + Vitamin C",
+        description: "Vitamin C significantly enhances the absorption of non-heme iron. Taking these together is highly beneficial.",
+        impact: "positive"
+      });
+    }
+
+    if (lowerSupps.some(s => s.includes('vitamin d')) && (lowerSupps.some(s => s.includes('vitamin k')) || lowerSupps.some(s => s.includes('calcium')))) {
+      synergies.push({
+        title: "Vitamin D + K2/Calcium",
+        description: "Vitamin D enhances calcium absorption, and Vitamin K2 directs that calcium into bones rather than arteries. This is an excellent synergy for bone and heart health.",
+        impact: "positive"
+      });
+    }
+
+    return { warnings, synergies };
+  }
 }
 
 // Create service instance
@@ -654,6 +758,10 @@ export const mockGeminiService = {
 
   async generateTextResponse(prompt: string, context: UserContext) {
     return apiGeminiService.generateTextResponse(prompt, context);
+  },
+
+  async checkSupplementInteractions(supplements: string[]) {
+    return apiGeminiService.checkSupplementInteractions(supplements);
   }
 };
 

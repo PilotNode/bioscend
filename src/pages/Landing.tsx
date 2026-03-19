@@ -78,7 +78,7 @@ const Landing: React.FC = () => {
                             onClick={() => navigate('/login')}
                             className="w-full sm:w-auto px-8 py-4 bg-surface-raised border border-white/10 text-white font-medium rounded-xl hover:bg-surface-raised/80 transition-all flex items-center justify-center"
                         >
-                            Exisiting Member
+                            Existing Member
                         </button>
                     </div>
                 </div>

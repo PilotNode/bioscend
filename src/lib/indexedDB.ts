@@ -214,7 +214,9 @@ export const offlineStorage = {
   async getCompletions(userId: string, date?: string) {
     const db = await getDB();
     if (date) {
-      return db.getAllFromIndex('completions', 'date', date);
+      // Filter by date AND userId to prevent cross-user data leakage
+      const allForDate = await db.getAllFromIndex('completions', 'date', date);
+      return allForDate.filter(c => c.userId === userId);
     }
     return db.getAllFromIndex('completions', 'userId', userId);
   },
@@ -254,7 +256,9 @@ export const offlineStorage = {
   async getScheduleItems(userId: string, date?: string) {
     const db = await getDB();
     if (date) {
-      return db.getAllFromIndex('schedule', 'date', date);
+      // Filter by date AND userId to prevent cross-user data leakage
+      const allForDate = await db.getAllFromIndex('schedule', 'date', date);
+      return allForDate.filter(item => item.userId === userId);
     }
     return db.getAllFromIndex('schedule', 'userId', userId);
   },
@@ -288,5 +292,20 @@ export const offlineStorage = {
   async getMemories(userId: string) {
     const db = await getDB();
     return db.getAllFromIndex('memories', 'userId', userId);
+  },
+
+  // Clear all data from all stores — used on logout/user-switch
+  // to prevent cross-user data leakage in the shared IndexedDB cache
+  async clearAllData() {
+    const db = await getDB();
+    await Promise.all([
+      db.clear('supplements'),
+      db.clear('wellness'),
+      db.clear('completions'),
+      db.clear('history'),
+      db.clear('schedule'),
+      db.clear('settings'),
+      db.clear('memories')
+    ]);
   }
 };

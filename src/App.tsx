@@ -13,6 +13,7 @@ import Analytics from './pages/Analytics';
 import History from './pages/History';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import Analysis from './pages/Analysis';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import Landing from './pages/Landing';
@@ -128,6 +129,8 @@ const AppContent: React.FC = () => {
               <Route path="wellness" element={<Wellness />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="history" element={<History />} />
+              <Route path="interactions" element={<Analysis />} />
+              <Route path="analysis" element={<Analysis />} />
               <Route path="settings" element={<Settings />} />
               <Route path="profile" element={<Profile />} />
             </Route>
