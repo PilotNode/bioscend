@@ -14,11 +14,27 @@ const Wellness: React.FC = () => {
     name: '',
     description: '',
     duration: 10,
-    schedule: 'daily',
+    daysOfWeek: [] as number[],
     timeOfDay: 'morning',
     specificTime: '',
     useSpecificTime: false
   });
+
+  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const toggleDay = (dayIndex: number) => {
+    setFormData(prev => ({
+      ...prev,
+      daysOfWeek: prev.daysOfWeek.includes(dayIndex)
+        ? prev.daysOfWeek.filter(d => d !== dayIndex)
+        : [...prev.daysOfWeek, dayIndex].sort()
+    }));
+  };
+
+  const formatDays = (days: number[]) => {
+    if (!days || days.length === 0 || days.length === 7) return 'Every day';
+    return days.map(d => DAY_LABELS[d]).join(', ');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +57,7 @@ const Wellness: React.FC = () => {
       name: '',
       description: '',
       duration: 10,
-      schedule: 'daily',
+      daysOfWeek: [],
       timeOfDay: 'morning',
       specificTime: '',
       useSpecificTime: false
@@ -54,7 +70,7 @@ const Wellness: React.FC = () => {
       name: wellness.name,
       description: wellness.description,
       duration: wellness.duration,
-      schedule: wellness.schedule,
+      daysOfWeek: wellness.daysOfWeek || [],
       timeOfDay: wellness.timeOfDay,
       specificTime: wellness.specificTime || '',
       useSpecificTime: !!wellness.specificTime
@@ -124,16 +140,12 @@ const Wellness: React.FC = () => {
               <p className="text-sm text-gray-400">{wellness.description}</p>
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <Clock className="w-4 h-4" />
-                <span className="capitalize">{wellness.schedule}</span>
+                <span>{formatDays(wellness.daysOfWeek || [])}</span>
                 <span>•</span>
                 <span className="capitalize">
-                  {wellness.specificTime ? (
-                    <span className="text-secondary-400 font-medium">
-                      {wellness.specificTime} ({wellness.timeOfDay})
-                    </span>
-                  ) : (
-                    wellness.timeOfDay
-                  )}
+                  {wellness.specificTime
+                    ? <span className="text-secondary-400 font-medium">{wellness.specificTime} ({wellness.timeOfDay})</span>
+                    : wellness.timeOfDay}
                 </span>
               </div>
             </div>
@@ -163,7 +175,7 @@ const Wellness: React.FC = () => {
             name: '',
             description: '',
             duration: 10,
-            schedule: 'daily',
+            daysOfWeek: [],
             timeOfDay: 'morning',
             specificTime: '',
             useSpecificTime: false
@@ -202,19 +214,6 @@ const Wellness: React.FC = () => {
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Schedule</label>
-              <select
-                value={formData.schedule}
-                onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
-                className="w-full px-4 py-3 bg-surface-raised border border-surface-overlay rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="daily">Daily</option>
-                <option value="weekly">Weekly</option>
-                <option value="custom">Custom</option>
-              </select>
-            </div>
-            
-            <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">Time of Day</label>
               <select
                 value={formData.timeOfDay}
@@ -226,6 +225,30 @@ const Wellness: React.FC = () => {
                 <option value="evening">Evening</option>
               </select>
             </div>
+          </div>
+
+          {/* Day-of-week picker */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Days &nbsp;<span className="text-gray-500 font-normal">(leave all off = every day)</span>
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              {DAY_LABELS.map((label, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggleDay(i)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    formData.daysOfWeek.includes(i)
+                      ? 'bg-secondary-500 border-secondary-500 text-white'
+                      : 'bg-surface-raised border-surface-overlay text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">{formatDays(formData.daysOfWeek)}</p>
           </div>
 
           {/* Specific Time Section */}
