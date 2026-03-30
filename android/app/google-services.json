@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "432781943067-5jmee3bn3vtvpq1qfg71t69k07p1re6f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.bioscend.app",
+            "certificate_hash": "a1b76088189e80a368691ff28d57efd6056eca71"
+          }
+        },
+        {
           "client_id": "432781943067-m5hlab2mpd9pid8cmd9renorjnughajp.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

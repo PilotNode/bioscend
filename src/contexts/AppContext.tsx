@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { offlineStorage } from '../lib/indexedDB';
 import { firestoreService } from '../lib/firestore';
 import { openRouterService } from '../lib/openrouter';
+import { notificationService } from '../lib/notifications';
 // import { firebaseGeminiService } from '../lib/gemini'; // Deprecated
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -89,7 +90,8 @@ type AppAction =
   | { type: 'UPDATE_SCHEDULE_ITEM'; payload: ScheduleItem }
   | { type: 'ADD_SCHEDULE_ITEM'; payload: ScheduleItem }
   | { type: 'REMOVE_SCHEDULE_ITEMS'; payload: string[] }
-  | { type: 'CLEAR_SCHEDULE_ITEMS'; payload: void };
+  | { type: 'CLEAR_SCHEDULE_ITEMS'; payload: void }
+  | { type: 'RESET_STATE' };
 
 const initialState: AppState = {
   aiEnabled: true,
@@ -207,6 +209,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         ...state,
         scheduleItems: []
       };
+    case 'RESET_STATE':
+      // Clear all user-specific data to prevent cross-user leakage
+      return {
+        ...initialState,
+        syncStatus: state.syncStatus // preserve connectivity status
+      };
     default:
       return state;
   }
@@ -256,6 +264,7 @@ interface AppContextType {
   generateAIInsights: () => Promise<any>;
   generateSupplementRecommendations: () => Promise<any>;
   askAIQuestion: (question: string, history?: { role: 'user' | 'assistant', content: string }[]) => Promise<string>;
+  checkInteractions: (supplements: string[]) => Promise<any>;
   toggleAI: () => Promise<void>;
   syncData: () => Promise<void>;
   generateScheduleForDate: (date: string) => Promise<void>;
@@ -265,6 +274,7 @@ interface AppContextType {
   getHistoryForDateRange: (startDate: string, endDate: string) => HistoryEntry[];
   getAnalyticsData: (days: number) => any;
   getTimeBlock: (time: string) => 'morning' | 'afternoon' | 'evening';
+  enableNotifications: () => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -300,8 +310,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Firestore listeners with proper cleanup
   useEffect(() => {
+    // CRITICAL: Reset all state immediately on any user change
+    // This prevents stale data from a previous user from leaking
+    dispatch({ type: 'RESET_STATE' });
+
+    // Clear IndexedDB cache to prevent cross-user data leakage
+    offlineStorage.clearAllData().catch(err =>
+      console.error('Failed to clear IndexedDB on user change:', err)
+    );
+
     if (!user) {
-      dispatch({ type: 'SET_INITIALIZED', payload: false });
       return;
     }
 
@@ -322,16 +340,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubscribeSupplements = firestoreService.subscribeToSupplements(user.uid, (supplements) => {
           console.log('Received supplements from Firestore:', supplements.length);
           dispatch({ type: 'SET_SUPPLEMENTS', payload: supplements });
-          // Cache locally
-          supplements.forEach(supplement => offlineStorage.addSupplement(supplement).catch(() => { }));
+          // Cache locally (use updateSupplement which uses put, not add, to avoid ConstraintErrors)
+          supplements.forEach(supplement => offlineStorage.updateSupplement(supplement).catch(() => { }));
         });
 
         // Subscribe to wellness
         unsubscribeWellness = firestoreService.subscribeToWellness(user.uid, (wellness) => {
           console.log('Received wellness from Firestore:', wellness.length);
           dispatch({ type: 'SET_WELLNESS', payload: wellness });
-          // Cache locally
-          wellness.forEach(w => offlineStorage.addWellness(w).catch(() => { }));
+          // Cache locally (use updateWellness which uses put, not add, to avoid ConstraintErrors)
+          wellness.forEach(w => offlineStorage.updateWellness(w).catch(() => { }));
         });
 
         // Subscribe to history (new comprehensive tracking)
@@ -1011,6 +1029,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [state.aiEnabled, user, state.supplements, state.wellness, state.completions, state.history, state.memories, state.profile, addMemory]);
 
+  const checkInteractions = useCallback(async (supplements: string[]) => {
+    if (!state.aiEnabled || !user) {
+      throw new Error("AI features are disabled.");
+    }
+    return await openRouterService.checkSupplementInteractions(supplements);
+  }, [state.aiEnabled, user]);
+
   const toggleAI = useCallback(async () => {
     if (!user) return;
 
@@ -1097,7 +1122,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newItems: ScheduleItem[] = [];
 
       // Generate items for supplements
+      const todayDow = new Date(date + 'T00:00:00').getDay(); // 0=Sun
       state.supplements.forEach(supplement => {
+        // Skip if item has day-of-week restrictions and today isn't included
+        if (supplement.daysOfWeek?.length > 0 && !supplement.daysOfWeek.includes(todayDow)) return;
         const newItem: ScheduleItem = {
           id: `schedule-${supplement.id}-${date}-supplement`,
           itemId: supplement.id,
@@ -1116,6 +1144,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Generate items for wellness
       state.wellness.forEach(wellnessItem => {
+        // Skip if item has day-of-week restrictions and today isn't included
+        if (wellnessItem.daysOfWeek?.length > 0 && !wellnessItem.daysOfWeek.includes(todayDow)) return;
         const newItem: ScheduleItem = {
           id: `schedule-${wellnessItem.id}-${date}-wellness`,
           itemId: wellnessItem.id,
@@ -1179,11 +1209,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             : state.wellness.find(w => w.id === scheduleItem.itemId);
 
           if (sourceItem) {
+            // Compute on-time: compare completion time to scheduled window
+            const computeOnTime = (): boolean => {
+              const [actualH, actualM] = (format(new Date(), 'HH:mm')).split(':').map(Number);
+              const actualMins = actualH * 60 + actualM;
+              if (sourceItem.specificTime) {
+                // Specific time: ±15 min buffer
+                const [schH, schM] = sourceItem.specificTime.split(':').map(Number);
+                const schMins = schH * 60 + schM;
+                return Math.abs(actualMins - schMins) <= 15;
+              }
+              // Time-of-day window: mark on-time if within the block
+              const windows: Record<string, [number, number]> = {
+                morning: [6 * 60, 12 * 60],   // 06:00–11:59
+                afternoon: [12 * 60, 17 * 60], // 12:00–16:59
+                evening: [17 * 60, 23 * 60],   // 17:00–22:59
+              };
+              const block = windows[sourceItem.timeOfDay];
+              return block ? (actualMins >= block[0] && actualMins < block[1]) : true;
+            };
+
             // Create metadata object with only defined values
             const metadata: any = {
               timeOfDay: sourceItem.timeOfDay || 'morning',
               originalTime: scheduleItem.time,
-              actualCompletionTime: format(new Date(), 'HH:mm')
+              actualCompletionTime: format(new Date(), 'HH:mm'),
+              onTime: computeOnTime()
             };
 
             // Only add fields that exist and are not undefined
@@ -1300,6 +1351,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return data;
   }, [state.history, state.scheduleItems]);
 
+  // ─── Request notification permissions on startup (native Android/iOS) ───────
+  useEffect(() => {
+    if (!state.initialized) return;
+    // Only request if notifications are enabled in settings
+    if (!state.notifications) return;
+    // Check if we already have permission; if not, request it
+    notificationService.checkPermissions().then(granted => {
+      if (!granted) {
+        notificationService.requestPermissions().then(nowGranted => {
+          if (!nowGranted) {
+            // User denied — turn off the toggle silently so state is consistent
+            dispatch({ type: 'SET_NOTIFICATIONS', payload: false });
+          }
+        });
+      }
+    });
+  }, [state.initialized]); // Only run once when app finishes loading
+
+  // ─── Smart Reminders: sync notifications when schedule or toggle changes ───
+  useEffect(() => {
+    if (state.notifications && state.initialized) {
+      notificationService.syncNotifications(state.scheduleItems);
+    } else {
+      notificationService.cancelAll();
+    }
+  }, [state.scheduleItems, state.notifications, state.initialized]);
+
+  const enableNotifications = useCallback(async (): Promise<boolean> => {
+    const granted = await notificationService.requestPermissions();
+    dispatch({ type: 'SET_NOTIFICATIONS', payload: granted });
+    if (granted) {
+      toast.success('Reminders enabled!');
+      // Immediately sync any existing schedule
+      await notificationService.syncNotifications(state.scheduleItems);
+    } else {
+      toast.error('Notification permission denied.');
+    }
+    return granted;
+  }, [state.scheduleItems]);
+
   const value = {
     state,
     dispatch,
@@ -1316,6 +1407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     generateAIInsights,
     generateSupplementRecommendations,
     askAIQuestion,
+    checkInteractions,
     toggleAI,
     syncData,
     generateScheduleForDate,
@@ -1324,7 +1416,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     regenerateSchedules,
     getHistoryForDateRange,
     getAnalyticsData,
-    getTimeBlock
+    getTimeBlock,
+    enableNotifications
   };
 
   return (

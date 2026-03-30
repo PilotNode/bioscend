@@ -8,7 +8,8 @@ import {
   BarChart3, 
   History, 
   Settings,
-  Brain
+  Brain,
+  FlaskConical
 } from 'lucide-react';
 import { useApp } from '../../contexts/AppContext';
 
@@ -22,6 +23,7 @@ const Navigation: React.FC = () => {
     { path: '/wellness', icon: Heart, label: 'Wellness' },
     { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     { path: '/history', icon: History, label: 'History' },
+    { path: '/analysis', icon: FlaskConical, label: 'Analysis' },
     { path: '/settings', icon: Settings, label: 'Settings' }
   ];
 

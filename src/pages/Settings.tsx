@@ -7,13 +7,18 @@ import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const Settings: React.FC = () => {
-  const { state, toggleAI, dispatch } = useApp();
+  const { state, toggleAI, dispatch, enableNotifications } = useApp();
   const { logout } = useAuth();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleNotificationToggle = async () => {
-    dispatch({ type: 'SET_NOTIFICATIONS', payload: !state.notifications });
-    // Save to storage
+    if (!state.notifications) {
+      // Turning ON: request permissions via the service
+      await enableNotifications();
+    } else {
+      // Turning OFF: just flip the state (the useEffect in AppContext will cancel notifications)
+      dispatch({ type: 'SET_NOTIFICATIONS', payload: false });
+    }
   };
 
   const handleDarkModeToggle = async () => {

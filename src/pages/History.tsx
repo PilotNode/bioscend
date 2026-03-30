@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Filter, Search, CheckCircle2, Clock, Pill, Heart, TrendingUp } from 'lucide-react';
-import { format, parseISO, subDays, startOfDay, endOfDay } from 'date-fns';
+import { Calendar, Search, CheckCircle2, Clock, Pill, Heart, TrendingUp } from 'lucide-react';
+import { format, parseISO, subDays } from 'date-fns';
 import Card from '../components/UI/Card';
 import Input from '../components/UI/Input';
 import { useApp } from '../contexts/AppContext';
@@ -39,9 +39,7 @@ const History: React.FC = () => {
   // Group history by date
   const groupedHistory = filteredHistory.reduce((groups, entry) => {
     const date = entry.date;
-    if (!groups[date]) {
-      groups[date] = [];
-    }
+    if (!groups[date]) groups[date] = [];
     groups[date].push(entry);
     return groups;
   }, {} as Record<string, any[]>);
@@ -54,32 +52,32 @@ const History: React.FC = () => {
     );
   };
 
-  const formatCompletionTime = (completedAt: Date, originalTime: string, actualTime: string) => {
-    const timeDiff = Math.abs(
-      new Date(`2000-01-01 ${actualTime}`).getTime() - 
-      new Date(`2000-01-01 ${originalTime}`).getTime()
-    ) / (1000 * 60); // minutes
-    
-    if (timeDiff <= 15) {
-      return { text: 'On time', color: 'text-success' };
-    } else if (timeDiff <= 60) {
-      return { text: `${Math.round(timeDiff)}m late`, color: 'text-warning' };
-    } else {
-      return { text: `${Math.round(timeDiff / 60)}h late`, color: 'text-error' };
+  const formatCompletionTime = (_completedAt: Date, originalTime: string, actualTime: string, onTime?: boolean) => {
+    // If the stored onTime flag is available (new entries), use it
+    if (onTime === true) return { text: 'On time', color: 'text-success' };
+    if (onTime === false) {
+      // Show how late/early they were
+      const diff = (new Date(`2000-01-01 ${actualTime}`).getTime() - new Date(`2000-01-01 ${originalTime}`).getTime()) / 60000;
+      const absDiff = Math.abs(diff);
+      return absDiff >= 60
+        ? { text: `${Math.round(absDiff / 60)}h late`, color: 'text-error' }
+        : { text: `${Math.round(absDiff)}m late`, color: 'text-warning' };
     }
+    // Legacy entries without onTime: fall back to simple 15-minute comparison
+    const timeDiff = Math.abs(
+      new Date(`2000-01-01 ${actualTime}`).getTime() -
+      new Date(`2000-01-01 ${originalTime}`).getTime()
+    ) / (1000 * 60);
+    if (timeDiff <= 15) return { text: 'On time', color: 'text-success' };
+    if (timeDiff <= 60) return { text: `${Math.round(timeDiff)}m late`, color: 'text-warning' };
+    return { text: `${Math.round(timeDiff / 60)}h late`, color: 'text-error' };
   };
 
   // Calculate summary stats
   const totalEntries = filteredHistory.length;
   const supplementEntries = filteredHistory.filter(h => h.itemType === 'supplement').length;
   const wellnessEntries = filteredHistory.filter(h => h.itemType === 'wellness').length;
-  const onTimeEntries = filteredHistory.filter(h => {
-    const timeDiff = Math.abs(
-      new Date(`2000-01-01 ${h.metadata.actualCompletionTime}`).getTime() - 
-      new Date(`2000-01-01 ${h.metadata.originalTime}`).getTime()
-    ) / (1000 * 60);
-    return timeDiff <= 15;
-  }).length;
+  const onTimeEntries = filteredHistory.filter(h => h.metadata?.onTime === true).length;
 
   return (
     <div className="space-y-6">
@@ -195,7 +193,7 @@ const History: React.FC = () => {
 
       {/* History Items */}
       <div className="space-y-6">
-        {Object.entries(groupedHistory).map(([date, entries]) => (
+        {(Object.entries(groupedHistory) as [string, any[]][]).map(([date, entries]) => (
           <div key={date}>
             <div className="flex items-center space-x-3 mb-4">
               <Calendar className="w-5 h-5 text-gray-400" />
@@ -213,7 +211,8 @@ const History: React.FC = () => {
                 const timing = formatCompletionTime(
                   entry.completedAt,
                   entry.metadata.originalTime,
-                  entry.metadata.actualCompletionTime
+                  entry.metadata.actualCompletionTime,
+                  entry.metadata.onTime
                 );
                 
                 return (

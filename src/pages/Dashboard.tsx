@@ -8,6 +8,7 @@ import Modal from '../components/UI/Modal';
 import Button from '../components/UI/Button';
 import Input from '../components/UI/Input';
 import { SimpleMarkdown } from '../components/UI/SimpleMarkdown';
+import StreakWidget from '../components/Dashboard/StreakWidget';
 import { useApp } from '../contexts/AppContext';
 
 import { toast } from 'react-hot-toast';
@@ -271,6 +272,9 @@ const Dashboard: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Streak Tracker — integrated with existing adherence data */}
+      <StreakWidget />
 
       {/* AI Insights */}
       {state.aiEnabled && state.aiInsights && (
