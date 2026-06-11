@@ -1,5 +1,5 @@
 import React from 'react';
-import { Analytics } from '@vercel/analytics/react';
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -171,7 +171,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <AppContent />
-      <Analytics />
+      <VercelAnalytics />
     </AuthProvider>
   );
 };
