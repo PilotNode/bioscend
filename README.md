@@ -12,7 +12,7 @@
   An intelligent wellness and longevity tracker that utilizes AI insights, holistic routine optimization, and deep personal analytics via beautiful charts. Built entirely with local-first and secure-cloud architecture.
 
   ![Version](https://img.shields.io/badge/version-15.06.26-blue.svg)
-  ![Engine](https://img.shields.io/badge/Configurable-purple.svg)
+  ![Engine](https://img.shields.io/badge/AI-Configurable-purple.svg)
   ![Platform](https://img.shields.io/badge/Platform-Web_|_Android-green.svg)
 </div>
 
