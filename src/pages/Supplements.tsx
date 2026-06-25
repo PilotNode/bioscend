@@ -4,12 +4,14 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import Input from '../components/UI/Input';
+import ConfirmDialog from '../components/UI/ConfirmDialog';
 import { useApp } from '../contexts/AppContext';
 
 const Supplements: React.FC = () => {
   const { state, addSupplement, updateSupplement, deleteSupplement } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplement, setEditingSupplement] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     dosage: '',
@@ -82,8 +84,13 @@ const Supplements: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this supplement?')) {
-      await deleteSupplement(id);
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTarget) {
+      await deleteSupplement(deleteTarget);
+      setDeleteTarget(null);
     }
   };
 
@@ -291,6 +298,18 @@ const Supplements: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Supplement"
+        message="Are you sure you want to delete this supplement? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Keep it"
+        variant="danger"
+      />
     </div>
   );
 };

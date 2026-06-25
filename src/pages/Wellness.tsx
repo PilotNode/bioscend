@@ -4,12 +4,14 @@ import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import Input from '../components/UI/Input';
+import ConfirmDialog from '../components/UI/ConfirmDialog';
 import { useApp } from '../contexts/AppContext';
 
 const Wellness: React.FC = () => {
   const { state, addWellness, updateWellness, deleteWellness } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWellness, setEditingWellness] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -79,8 +81,13 @@ const Wellness: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this wellness activity?')) {
-      await deleteWellness(id);
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = async () => {
+    if (deleteTarget) {
+      await deleteWellness(deleteTarget);
+      setDeleteTarget(null);
     }
   };
 
@@ -296,6 +303,18 @@ const Wellness: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Activity"
+        message="Are you sure you want to delete this wellness activity? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Keep it"
+        variant="danger"
+      />
     </div>
   );
 };

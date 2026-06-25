@@ -6,8 +6,8 @@ import MobileNavigation from './MobileNavigation';
 
 const Layout: React.FC = () => {
   return (
-    <div className="min-h-screen bg-surface-base safe-area-bottom">
-      {/* Mobile Navigation */}
+    <div className="min-h-screen bg-surface-base">
+      {/* Mobile Navigation (top header + bottom tab bar) */}
       <MobileNavigation />
 
       {/* Desktop Layout */}
@@ -26,9 +26,18 @@ const Layout: React.FC = () => {
         </div>
       </div>
 
-      {/* Mobile Main Content */}
+      {/* Mobile Main Content
+          pb-[calc(56px+env(safe-area-inset-bottom))] accounts for:
+          - 56px bottom tab bar height
+          - safe-area-inset-bottom (notch devices)
+      */}
       <div className="md:hidden">
-        <main className="p-4 pb-20">
+        <main
+          className="p-4 overflow-y-auto"
+          style={{
+            paddingBottom: 'calc(56px + env(safe-area-inset-bottom) + 16px)',
+          }}
+        >
           <Outlet />
         </main>
       </div>

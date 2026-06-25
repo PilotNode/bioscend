@@ -1,4 +1,4 @@
-package com.bioscend.app;
+package com.pndist.bioscend;
 
 import com.getcapacitor.BridgeActivity;
 

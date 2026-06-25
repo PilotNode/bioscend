@@ -2,54 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom animations for onboarding */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
+/* ═══════════════════════════════════════════════
+   GLOBAL MOBILE / CAPACITOR OPTIMIZATIONS
+═══════════════════════════════════════════════ */
 
-  to {
-    opacity: 1;
-  }
+/* Prevent tap highlight flash on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Smooth momentum scrolling on iOS WebView */
+html {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
-@keyframes bounceSubtle {
-
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-8px);
-  }
+/* Prevent overscroll bleeding through modals */
+body {
+  overscroll-behavior: contain;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.5s ease-out;
+/* Prevent text/image selection on UI elements */
+button,
+a,
+[role="button"],
+label {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.animate-slide-up {
-  animation: slideUp 0.6s ease-out;
+/* Active press feedback for touch — subtle scale */
+button:active:not(:disabled),
+[role="button"]:active {
+  transform: scale(0.97);
+  transition: transform 0.08s ease;
 }
 
-.animate-bounce-subtle {
-  animation: bounceSubtle 1s ease-in-out infinite;
+/* ═══════════════════════════════════════════════
+   CUSTOM SCROLLBARS (dark theme)
+═══════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
 }
 
-/* Safe Area Utilities for Mobile */
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ═══════════════════════════════════════════════
+   SAFE AREA UTILITIES
+═══════════════════════════════════════════════ */
+
 .safe-area-top {
   padding-top: env(safe-area-inset-top);
 }
@@ -60,4 +74,143 @@
 
 .safe-area-pt {
   padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-inset-top {
+  top: env(safe-area-inset-top);
+}
+
+/* ═══════════════════════════════════════════════
+   BOTTOM TAB BAR
+═══════════════════════════════════════════════ */
+
+.bottom-tab-bar {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ═══════════════════════════════════════════════
+   BOTTOM SHEET ANIMATIONS
+═══════════════════════════════════════════════ */
+
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-sheet-up {
+  animation: slideUpSheet 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.animate-overlay-in {
+  animation: fadeInOverlay 0.2s ease-out;
+}
+
+/* ═══════════════════════════════════════════════
+   SLIDE-UP ANIMATION (consolidated — used everywhere)
+═══════════════════════════════════════════════ */
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bounceSubtle {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.35s ease-out;
+}
+
+.animate-bounce-subtle {
+  animation: bounceSubtle 1s ease-in-out infinite;
+}
+
+/* Shimmer for skeletons */
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════
+   AI CHAT TEXTAREA AUTO-RESIZE
+═══════════════════════════════════════════════ */
+
+.chat-textarea {
+  min-height: 44px;
+  max-height: 120px;
+  resize: none;
+  overflow-y: auto;
+}
+
+/* ═══════════════════════════════════════════════
+   SCROLL MARGIN FOR KEYBOARD VISIBILITY
+═══════════════════════════════════════════════ */
+
+input, textarea, select {
+  scroll-margin-bottom: 80px;
+}
+
+/* ═══════════════════════════════════════════════
+   TOUCH MANIPULATION
+═══════════════════════════════════════════════ */
+
+.touch-manipulation {
+  touch-action: manipulation;
 }

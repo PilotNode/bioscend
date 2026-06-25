@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.bioscend.app',
+  appId: 'com.pndist.bioscend',
   appName: 'BioScend',
   webDir: 'dist',
   plugins: {

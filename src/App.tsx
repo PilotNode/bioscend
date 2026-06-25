@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -95,10 +95,22 @@ const RootRoute: React.FC = () => {
 
 const AppContent: React.FC = () => {
   const handleOnboardingComplete = async () => {
-    // The onboarding quiz already updates the profile with onboardingCompleted: true
-    // This is just a callback to handle any additional logic if needed
     console.log('Onboarding flow completed');
   };
+
+  // Initialize Capacitor StatusBar for native dark appearance
+  useEffect(() => {
+    const initStatusBar = async () => {
+      try {
+        const { StatusBar, Style } = await import('@capacitor/status-bar');
+        await StatusBar.setStyle({ style: Style.Dark });
+        await StatusBar.setBackgroundColor({ color: '#121212' });
+      } catch {
+        // Not in a Capacitor context (e.g., browser) — ignore
+      }
+    };
+    initStatusBar();
+  }, []);
 
   return (
     <AppProvider>
@@ -138,7 +150,11 @@ const AppContent: React.FC = () => {
           </Routes>
 
           <Toaster
-            position="top-right"
+            position="bottom-center"
+            gutter={12}
+            containerStyle={{
+              bottom: 'calc(56px + env(safe-area-inset-bottom) + 8px)',
+            }}
             toastOptions={{
               duration: 4000,
               style: {
@@ -146,6 +162,8 @@ const AppContent: React.FC = () => {
                 color: '#fff',
                 border: '1px solid #333333',
                 borderRadius: '12px',
+                fontSize: '14px',
+                maxWidth: '360px',
               },
               success: {
                 iconTheme: {

@@ -2,36 +2,52 @@ import React, { useState } from 'react';
 import { Palette, Brain, Shield, LogOut } from 'lucide-react';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
-import Modal from '../components/UI/Modal';
+import Toggle from '../components/UI/Toggle';
+import ConfirmDialog from '../components/UI/ConfirmDialog';
 import { useApp } from '../contexts/AppContext';
 import { useAuth } from '../contexts/AuthContext';
+
+const AI_MODELS = [
+  { value: 'nvidia/nemotron-3-nano-30b-a3b:free', label: 'Nvidia Nemotron 30B (Free)' },
+  { value: 'google/gemini-2.0-flash-lite-preview-02-05:free', label: 'Gemini 2.0 Flash Lite (Free)' },
+  { value: 'google/gemini-2.0-pro-exp-02-05:free', label: 'Gemini 2.0 Pro Exp (Free)' },
+  { value: 'meta-llama/llama-3-8b-instruct:free', label: 'Llama 3 8B Instruct (Free)' },
+  { value: 'microsoft/phi-3-mini-128k-instruct:free', label: 'Phi-3 Mini (Free)' },
+];
 
 const Settings: React.FC = () => {
   const { state, toggleAI, dispatch, enableNotifications } = useApp();
   const { logout } = useAuth();
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('nvidia/nemotron-3-nano-30b-a3b:free');
 
-  const handleNotificationToggle = async () => {
-    if (!state.notifications) {
-      // Turning ON: request permissions via the service
+  const handleNotificationToggle = async (enabled: boolean) => {
+    if (enabled) {
       await enableNotifications();
     } else {
-      // Turning OFF: just flip the state (the useEffect in AppContext will cancel notifications)
       dispatch({ type: 'SET_NOTIFICATIONS', payload: false });
     }
   };
 
-  const handleDarkModeToggle = async () => {
-    dispatch({ type: 'SET_DARK_MODE', payload: !state.darkMode });
-    // Save to storage
+  const handleDarkModeToggle = (enabled: boolean) => {
+    dispatch({ type: 'SET_DARK_MODE', payload: enabled });
+  };
+
+  const handleModelChange = async (value: string) => {
+    setSelectedModel(value);
+    const { openRouterService } = await import('../lib/openrouter');
+    openRouterService.setModel(value);
   };
 
   const handleLogout = async () => {
+    setLogoutLoading(true);
     try {
       await logout();
-      setShowLogoutModal(false);
     } catch (error) {
       console.error('Logout failed:', error);
+    } finally {
+      setLogoutLoading(false);
     }
   };
 
@@ -49,62 +65,51 @@ const Settings: React.FC = () => {
           <Brain className="w-6 h-6 text-secondary-500" />
           <h2 className="text-base md:text-lg font-semibold text-white">AI Features</h2>
         </div>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm md:text-base font-medium text-white">AI Functionality</h3>
-              <p className="text-sm text-gray-400">Enable AI-powered insights and recommendations</p>
-            </div>
-            <button
-              onClick={toggleAI}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.aiEnabled
-                ? 'bg-primary-500 shadow-glow'
-                : 'bg-gray-600'
-                }`}
-            >
-              <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.aiEnabled ? 'translate-x-7' : 'translate-x-1'
-                  }`}
-              />
-            </button>
-          </div>
+        <div className="space-y-5">
+          <Toggle
+            enabled={state.aiEnabled}
+            onChange={toggleAI}
+            label="AI Functionality"
+            description="Enable AI-powered insights and recommendations"
+            id="toggle-ai"
+          />
 
           {state.aiEnabled && (
-            <div className="space-y-4">
+            <div className="space-y-4 pt-1">
               <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
                 <div className="flex items-center space-x-2 mb-2">
-                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-primary-500 rounded-full animate-pulse" />
                   <span className="text-sm font-medium text-primary-500">AI Active</span>
                 </div>
                 <p className="text-sm text-gray-400">
-                  AI features are currently enabled. You'll receive personalized insights,
-                  recommendations, and smart scheduling suggestions.
+                  You'll receive personalised insights, recommendations, and smart scheduling suggestions.
                 </p>
               </div>
 
               {/* Model Selection */}
               <div className="bg-surface-raised rounded-xl p-4 border border-surface-overlay">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
                   AI Model
                 </label>
-                <select
-                  className="w-full bg-surface-base border border-surface-overlay rounded-lg px-3 py-2 text-white focus:outline-none focus:border-primary-500"
-                  onChange={(e) => {
-                    // We'll handle this in AppContext later, or import service directly
-                    import('../lib/openrouter').then(({ openRouterService }) => {
-                      openRouterService.setModel(e.target.value);
-                      // Force re-render or save pref found in future
-                    });
-                  }}
-                  defaultValue="nvidia/nemotron-3-nano-30b-a3b:free"
-                >
-                  <option value="nvidia/nemotron-3-nano-30b-a3b:free">Nvidia Nemotron 30B (Free)</option>
-                  <option value="google/gemini-2.0-flash-lite-preview-02-05:free">Gemini 2.0 Flash Lite (Free)</option>
-                  <option value="google/gemini-2.0-pro-exp-02-05:free">Gemini 2.0 Pro Exp (Free)</option>
-                  <option value="meta-llama/llama-3-8b-instruct:free">Llama 3 8B Instruct (Free)</option>
-                  <option value="microsoft/phi-3-mini-128k-instruct:free">Phi-3 Mini (Free)</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-2">
+                <div className="space-y-2">
+                  {AI_MODELS.map((model) => (
+                    <button
+                      key={model.value}
+                      onClick={() => handleModelChange(model.value)}
+                      className={`w-full text-left px-4 py-3 rounded-xl border transition-all touch-manipulation ${
+                        selectedModel === model.value
+                          ? 'bg-primary-500/15 border-primary-500/40 text-white'
+                          : 'bg-surface-base border-surface-overlay text-gray-300 hover:border-surface-raised'
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{model.label}</span>
+                      {selectedModel === model.value && (
+                        <span className="ml-2 text-xs text-primary-400">✓ Active</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-3">
                   Select the AI model used for generating insights and recommendations.
                 </p>
               </div>
@@ -121,26 +126,13 @@ const Settings: React.FC = () => {
           </div>
           <h2 className="text-base md:text-lg font-semibold text-white">Notifications</h2>
         </div>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm md:text-base font-medium text-white">Push Notifications</h3>
-              <p className="text-sm text-gray-400">Receive reminders for supplements and wellness activities</p>
-            </div>
-            <button
-              onClick={handleNotificationToggle}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.notifications
-                ? 'bg-primary-500 shadow-glow'
-                : 'bg-gray-600'
-                }`}
-            >
-              <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.notifications ? 'translate-x-7' : 'translate-x-1'
-                  }`}
-              />
-            </button>
-          </div>
-        </div>
+        <Toggle
+          enabled={state.notifications}
+          onChange={handleNotificationToggle}
+          label="Push Notifications"
+          description="Receive reminders for supplements and wellness activities"
+          id="toggle-notifications"
+        />
       </Card>
 
       {/* Appearance Settings */}
@@ -149,26 +141,13 @@ const Settings: React.FC = () => {
           <Palette className="w-6 h-6 text-success" />
           <h2 className="text-base md:text-lg font-semibold text-white">Appearance</h2>
         </div>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm md:text-base font-medium text-white">Dark Mode</h3>
-              <p className="text-sm text-gray-400">Use dark theme for better readability</p>
-            </div>
-            <button
-              onClick={handleDarkModeToggle}
-              className={`relative w-12 h-6 rounded-full transition-all duration-200 touch-manipulation ${state.darkMode
-                ? 'bg-primary-500 shadow-glow'
-                : 'bg-gray-600'
-                }`}
-            >
-              <div
-                className={`absolute w-4 h-4 bg-white rounded-full top-1 transition-transform duration-200 ${state.darkMode ? 'translate-x-7' : 'translate-x-1'
-                  }`}
-              />
-            </button>
-          </div>
-        </div>
+        <Toggle
+          enabled={state.darkMode}
+          onChange={handleDarkModeToggle}
+          label="Dark Mode"
+          description="Use dark theme for better readability"
+          id="toggle-dark-mode"
+        />
       </Card>
 
       {/* Privacy & Security */}
@@ -177,7 +156,7 @@ const Settings: React.FC = () => {
           <Shield className="w-6 h-6 text-error" />
           <h2 className="text-base md:text-lg font-semibold text-white">Privacy & Security</h2>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <Button variant="outline" className="w-full">
             Export Data
           </Button>
@@ -193,45 +172,28 @@ const Settings: React.FC = () => {
           <LogOut className="w-6 h-6 text-warning" />
           <h2 className="text-base md:text-lg font-semibold text-white">Account</h2>
         </div>
-        <div className="space-y-4">
-          <Button
-            variant="outline"
-            className="w-full text-warning border-warning hover:bg-warning hover:text-white"
-            onClick={() => setShowLogoutModal(true)}
-          >
-            <LogOut className="w-5 h-5 mr-2" />
-            Sign Out
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          className="w-full text-warning border-warning hover:bg-warning hover:text-white"
+          onClick={() => setShowLogoutDialog(true)}
+        >
+          <LogOut className="w-5 h-5 mr-2" />
+          Sign Out
+        </Button>
       </Card>
 
-      {/* Logout Confirmation Modal */}
-      <Modal
-        isOpen={showLogoutModal}
-        onClose={() => setShowLogoutModal(false)}
-        title="Confirm Sign Out"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-300">
-            Are you sure you want to sign out? You'll need to sign in again to access your data.
-          </p>
-          <div className="flex space-x-3">
-            <Button
-              onClick={handleLogout}
-              className="flex-1 bg-warning hover:bg-warning/80"
-            >
-              Yes, Sign Out
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setShowLogoutModal(false)}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Logout Confirmation */}
+      <ConfirmDialog
+        isOpen={showLogoutDialog}
+        onClose={() => setShowLogoutDialog(false)}
+        onConfirm={handleLogout}
+        title="Sign Out"
+        message="Are you sure you want to sign out? You'll need to sign in again to access your data."
+        confirmLabel="Yes, Sign Out"
+        cancelLabel="Cancel"
+        variant="warning"
+        loading={logoutLoading}
+      />
     </div>
   );
 };
