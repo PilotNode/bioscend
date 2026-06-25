@@ -8,7 +8,7 @@
   # BioScend
   
   **Elevate Your Biology & Mind** 🧬🧠
-  Here
+  
   An intelligent wellness and longevity tracker that utilizes AI insights, holistic routine optimization, and deep personal analytics via beautiful charts. Built entirely with local-first and secure-cloud architecture.
 
   ![Version](https://img.shields.io/badge/version-15.06.26-blue.svg)
